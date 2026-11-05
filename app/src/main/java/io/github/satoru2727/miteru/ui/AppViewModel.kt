@@ -406,6 +406,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         var index = 0
         while (true) {
             val positionSeconds = playback.positionMs() / 1000.0
+            // 途中再開時に何百件も一気に流さないよう、3 秒より前のコメントは捨てる
+            while (index < comments.size && comments[index].timeSeconds < positionSeconds - 3) {
+                index += 1
+            }
             while (index < comments.size && comments[index].timeSeconds <= positionSeconds) {
                 emit(comments[index])
                 index += 1
