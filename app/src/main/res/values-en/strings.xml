@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Miteru</string>
+
+    <!-- Navigation -->
+    <string name="nav_live">Live</string>
+    <string name="nav_guide">Guide</string>
+    <string name="nav_recordings">Recordings</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Setup -->
+    <string name="setup_title">Connect to KonomiTV</string>
+    <string name="setup_subtitle">Enter the address of the KonomiTV server running at home.</string>
+    <string name="setup_url_label">Server URL</string>
+    <string name="setup_url_placeholder">http://192.168.1.10:7000</string>
+    <string name="setup_connect">Connect</string>
+    <string name="setup_connecting">Connecting…</string>
+    <string name="setup_success">Connected</string>
+    <string name="setup_failed">Could not connect</string>
+    <string name="setup_hint">e.g. http://192.168.1.10:7000 · https://konomi.example.com</string>
+    <string name="setup_backend">Backend</string>
+    <string name="setup_version">Version</string>
+    <string name="setup_environment">Environment</string>
+    <string name="setup_start">Get started</string>
+    <string name="setup_change_later">You can change the server later in Settings</string>
+    <string name="setup_error_empty">Enter a URL</string>
+    <string name="setup_error_scheme">The URL must start with http:// or https://</string>
+    <string name="setup_cleartext_note">Plain HTTP on your local network is supported.</string>
+
+    <!-- Live -->
+    <string name="live_title">Live</string>
+    <string name="live_search">Search channels</string>
+    <string name="live_all">All</string>
+    <string name="live_gr">Terrestrial</string>
+    <string name="live_bs">BS</string>
+    <string name="live_cs">CS</string>
+    <string name="live_other">Other</string>
+    <string name="live_empty">No channels</string>
+    <string name="live_empty_hint">Check that channels are configured on the server.</string>
+    <string name="live_count">%1$d channels</string>
+
+    <!-- Guide -->
+    <string name="guide_title">Guide</string>
+    <string name="guide_today">Today</string>
+    <string name="guide_tomorrow">Tomorrow</string>
+    <string name="guide_day_after">Day after</string>
+    <string name="guide_now">Now</string>
+    <string name="guide_no_programs">No program information</string>
+    <string name="guide_reserved">Reserved</string>
+    <string name="guide_recording">Recording</string>
+    <string name="guide_watch_now">Watch now</string>
+    <string name="guide_zoom_in">Zoom in</string>
+    <string name="guide_reserve_hint">Scheduling is done from the KonomiTV web UI.</string>
+    <string name="guide_zoom_out">Zoom out</string>
+
+    <!-- Recordings -->
+    <string name="recordings_title">Recordings</string>
+    <string name="recordings_search">Search recordings</string>
+    <string name="recordings_all">All</string>
+    <string name="recordings_ts">MPEG-TS</string>
+    <string name="recordings_mp4">MP4</string>
+    <string name="recordings_sort">Sort</string>
+    <string name="recordings_sort_new">Newest first</string>
+    <string name="recordings_sort_old">Oldest first</string>
+    <string name="recordings_empty">No recordings</string>
+    <string name="recordings_empty_hint">Programs recorded with KonomiTV appear here.</string>
+    <string name="recordings_count">%1$d items</string>
+    <string name="recordings_resume">Resume %1$s</string>
+    <string name="recordings_no_match">No matching recordings</string>
+
+    <!-- Player -->
+    <string name="player_live">Live</string>
+    <string name="player_quality">Quality</string>
+    <string name="player_audio">Audio</string>
+    <string name="player_audio_primary">Primary</string>
+    <string name="player_audio_secondary">Secondary</string>
+    <string name="player_pip">Picture-in-picture</string>
+    <string name="player_retry">Retry</string>
+    <string name="player_error">Playback failed</string>
+    <string name="player_error_hint">Check that the server is running and the quality setting is available.</string>
+    <string name="player_resume_title">Resume playback?</string>
+    <string name="player_resume_message">Continue from %1$s.</string>
+    <string name="player_resume_play">Resume</string>
+    <string name="player_resume_start">Start over</string>
+    <string name="player_close">Close</string>
+    <string name="player_live_badge">LIVE</string>
+    <string name="player_channel_up">Next channel</string>
+    <string name="player_channel_down">Previous channel</string>
+    <string name="player_quality_note">Changing quality restarts playback.</string>
+
+    <!-- Mini player -->
+    <string name="mini_player_close">Stop playback</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_server">Server</string>
+    <string name="settings_server_change">Change</string>
+    <string name="settings_connected">Connected</string>
+    <string name="settings_disconnected">Disconnected</string>
+    <string name="settings_playback">Playback</string>
+    <string name="settings_default_quality">Default quality</string>
+    <string name="settings_mobile_warning">Warn on mobile data</string>
+    <string name="settings_mobile_warning_desc">Ask before streaming over a metered network</string>
+    <string name="settings_resume">Resume playback</string>
+    <string name="settings_resume_desc">Remember the last playback position</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_dynamic_color">Dynamic color</string>
+    <string name="settings_dynamic_color_desc">Use colors from your wallpaper</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_source">Source code</string>
+    <string name="settings_license">License</string>
+    <string name="settings_license_value">Unlicense (public domain)</string>
+    <string name="settings_fdroid">F-Droid</string>
+    <string name="settings_fdroid_value">Submission in progress</string>
+    <string name="settings_clear_cache">Clear cache</string>
+    <string name="settings_clear_cache_desc">Delete cached channel and guide data</string>
+    <string name="settings_disconnect">Change server</string>
+    <string name="settings_disconnect_confirm">Clear the server setting and return to setup?</string>
+    <string name="settings_cancel">Cancel</string>
+    <string name="settings_ok">OK</string>
+    <string name="settings_made_with">Built with Kotlin + Jetpack Compose</string>
+    <string name="settings_disclaimer">KonomiTV is a project by tsukumijima. This is an unofficial client.</string>
+
+    <!-- Common -->
+    <string name="common_retry">Retry</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_ok">OK</string>
+    <string name="common_offline">Offline</string>
+
+    <!-- Errors -->
+    <string name="error_network">Cannot reach the server. Check your network and the URL.</string>
+    <string name="error_not_found">API not found. Check that the URL points to KonomiTV.</string>
+    <string name="error_server">The server returned an error.</string>
+    <string name="error_unknown">Something went wrong.</string>
+    <string name="error_timeout">The server did not respond.</string>
+
+    <!-- Mobile data -->
+    <string name="metered_title">Play over mobile data?</string>
+    <string name="metered_message">This is a metered network. Streaming uses data.</string>
+    <string name="metered_play">Play</string>
+    <string name="metered_cancel">Cancel</string>
+
+    <!-- Notification -->
+</resources>

@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Miteru</string>
+
+    <!-- Navigation -->
+    <string name="nav_live">ライブ</string>
+    <string name="nav_guide">番組表</string>
+    <string name="nav_recordings">録画</string>
+    <string name="nav_settings">設定</string>
+
+    <!-- Setup -->
+    <string name="setup_title">KonomiTV に接続</string>
+    <string name="setup_subtitle">自宅で動いている KonomiTV サーバーのアドレスを入力してください。</string>
+    <string name="setup_url_label">サーバー URL</string>
+    <string name="setup_url_placeholder">http://192.168.1.10:7000</string>
+    <string name="setup_connect">接続する</string>
+    <string name="setup_connecting">接続しています…</string>
+    <string name="setup_success">接続できました</string>
+    <string name="setup_failed">接続できませんでした</string>
+    <string name="setup_hint">例: http://192.168.1.10:7000 ・ https://konomi.example.com</string>
+    <string name="setup_backend">バックエンド</string>
+    <string name="setup_version">バージョン</string>
+    <string name="setup_environment">環境</string>
+    <string name="setup_start">はじめる</string>
+    <string name="setup_change_later">サーバーはあとから設定で変更できます</string>
+    <string name="setup_error_empty">URL を入力してください</string>
+    <string name="setup_error_scheme">http:// または https:// で始めてください</string>
+    <string name="setup_cleartext_note">ローカルネットワークの HTTP 接続にも対応しています。</string>
+
+    <!-- Live -->
+    <string name="live_title">ライブ</string>
+    <string name="live_search">チャンネルを検索</string>
+    <string name="live_all">すべて</string>
+    <string name="live_gr">地上波</string>
+    <string name="live_bs">BS</string>
+    <string name="live_cs">CS</string>
+    <string name="live_other">その他</string>
+    <string name="live_empty">チャンネルがありません</string>
+    <string name="live_empty_hint">サーバーにチャンネルが設定されているか確認してください。</string>
+    <string name="live_count">%1$d チャンネル</string>
+
+    <!-- Guide -->
+    <string name="guide_title">番組表</string>
+    <string name="guide_today">今日</string>
+    <string name="guide_tomorrow">明日</string>
+    <string name="guide_day_after">明後日</string>
+    <string name="guide_now">現在</string>
+    <string name="guide_no_programs">番組情報がありません</string>
+    <string name="guide_reserved">予約済み</string>
+    <string name="guide_recording">録画中</string>
+    <string name="guide_watch_now">今すぐ見る</string>
+    <string name="guide_zoom_in">拡大</string>
+    <string name="guide_reserve_hint">録画予約は KonomiTV の Web UI から行えます。</string>
+    <string name="guide_zoom_out">縮小</string>
+
+    <!-- Recordings -->
+    <string name="recordings_title">録画</string>
+    <string name="recordings_search">録画を検索</string>
+    <string name="recordings_all">すべて</string>
+    <string name="recordings_ts">MPEG-TS</string>
+    <string name="recordings_mp4">MP4</string>
+    <string name="recordings_sort">並び替え</string>
+    <string name="recordings_sort_new">新しい順</string>
+    <string name="recordings_sort_old">古い順</string>
+    <string name="recordings_empty">録画がありません</string>
+    <string name="recordings_empty_hint">KonomiTV で録画した番組がここに表示されます。</string>
+    <string name="recordings_count">%1$d 件</string>
+    <string name="recordings_resume">続きから %1$s</string>
+    <string name="recordings_no_match">一致する録画がありません</string>
+
+    <!-- Player -->
+    <string name="player_live">ライブ</string>
+    <string name="player_quality">画質</string>
+    <string name="player_audio">音声</string>
+    <string name="player_audio_primary">主音声</string>
+    <string name="player_audio_secondary">副音声</string>
+    <string name="player_pip">ピクチャーインピクチャー</string>
+    <string name="player_retry">再試行</string>
+    <string name="player_error">再生できませんでした</string>
+    <string name="player_error_hint">サーバーが起動しているか、画質の設定を確認してください。</string>
+    <string name="player_resume_title">続きから再生しますか？</string>
+    <string name="player_resume_message">前回の位置 %1$s から再生します。</string>
+    <string name="player_resume_play">続きから</string>
+    <string name="player_resume_start">最初から</string>
+    <string name="player_close">閉じる</string>
+    <string name="player_live_badge">生放送</string>
+    <string name="player_channel_up">次のチャンネル</string>
+    <string name="player_channel_down">前のチャンネル</string>
+    <string name="player_quality_note">画質を変えると再生が最初からやり直しになります。</string>
+
+    <!-- Mini player -->
+    <string name="mini_player_close">再生を停止</string>
+
+    <!-- Settings -->
+    <string name="settings_title">設定</string>
+    <string name="settings_server">サーバー</string>
+    <string name="settings_server_change">変更</string>
+    <string name="settings_connected">接続済み</string>
+    <string name="settings_disconnected">未接続</string>
+    <string name="settings_playback">再生</string>
+    <string name="settings_default_quality">既定の画質</string>
+    <string name="settings_mobile_warning">モバイル通信時に確認する</string>
+    <string name="settings_mobile_warning_desc">従量制ネットワークで再生する前に警告します</string>
+    <string name="settings_resume">続きから再生</string>
+    <string name="settings_resume_desc">前回の視聴位置を記憶します</string>
+    <string name="settings_appearance">外観</string>
+    <string name="settings_theme">テーマ</string>
+    <string name="settings_theme_system">システム</string>
+    <string name="settings_theme_dark">ダーク</string>
+    <string name="settings_theme_light">ライト</string>
+    <string name="settings_dynamic_color">ダイナミックカラー</string>
+    <string name="settings_dynamic_color_desc">壁紙の色をアプリに反映します</string>
+    <string name="settings_about">アプリについて</string>
+    <string name="settings_version">バージョン</string>
+    <string name="settings_source">ソースコード</string>
+    <string name="settings_license">ライセンス</string>
+    <string name="settings_license_value">Unlicense（パブリックドメイン）</string>
+    <string name="settings_fdroid">F-Droid</string>
+    <string name="settings_fdroid_value">掲載準備中</string>
+    <string name="settings_clear_cache">キャッシュを削除</string>
+    <string name="settings_clear_cache_desc">チャンネルと番組表の一時データを削除します</string>
+    <string name="settings_disconnect">サーバーを変更</string>
+    <string name="settings_disconnect_confirm">サーバー設定を消去してセットアップ画面に戻りますか？</string>
+    <string name="settings_cancel">キャンセル</string>
+    <string name="settings_ok">OK</string>
+    <string name="settings_made_with">Kotlin + Jetpack Compose で作られています</string>
+    <string name="settings_disclaimer">KonomiTV は tsukumijima 氏のプロジェクトです。これは非公式クライアントです。</string>
+
+    <!-- Common -->
+    <string name="common_retry">再試行</string>
+    <string name="common_cancel">キャンセル</string>
+    <string name="common_ok">OK</string>
+    <string name="common_offline">オフライン</string>
+
+    <!-- Errors -->
+    <string name="error_network">サーバーに接続できません。ネットワークと URL を確認してください。</string>
+    <string name="error_not_found">API が見つかりません。URL が KonomiTV のものか確認してください。</string>
+    <string name="error_server">サーバーがエラーを返しました。</string>
+    <string name="error_unknown">予期しないエラーが発生しました。</string>
+    <string name="error_timeout">サーバーの応答がありません。</string>
+
+    <!-- Mobile data -->
+    <string name="metered_title">モバイル通信で再生しますか？</string>
+    <string name="metered_message">従量制のネットワークです。ストリーミングには通信量がかかります。</string>
+    <string name="metered_play">再生する</string>
+    <string name="metered_cancel">キャンセル</string>
+
+    <!-- Notification -->
+</resources>

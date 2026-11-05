@@ -1,0 +1,1 @@
+Unofficial KonomiTV client for live TV, guide and recordings

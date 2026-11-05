@@ -1,0 +1,179 @@
+package io.github.satoru2727.miteru.core.net
+
+import io.github.satoru2727.miteru.core.model.Channel
+import io.github.satoru2727.miteru.core.model.Quality
+import io.github.satoru2727.miteru.core.model.Recording
+import io.github.satoru2727.miteru.core.model.RecordingsPage
+import io.github.satoru2727.miteru.core.model.ServerInfo
+import io.github.satoru2727.miteru.core.model.Timetable
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.serialization.json.Json
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import java.io.IOException
+import java.time.Instant
+import java.time.format.DateTimeFormatter
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
+class ApiException(
+    val statusCode: Int,
+    val detail: String,
+    cause: Throwable? = null,
+) : IOException(detail.ifBlank { "HTTP $statusCode" }, cause) {
+    val isNetworkError: Boolean get() = statusCode == 0
+}
+
+/** KonomiTV の REST API クライアント。1 インスタンス = 1 サーバー。 */
+class KonomiApi(
+    val baseUrl: HttpUrl,
+    private val client: OkHttpClient,
+    private val json: Json,
+) {
+    val baseUrlString: String get() = baseUrl.toString().trimEnd('/')
+
+    suspend fun version(): ServerInfo =
+        json.decodeFromString<VersionDto>(execute(get("api/version"))).toDomain()
+
+    suspend fun channelsDto(): LiveChannelsDto =
+        json.decodeFromString<LiveChannelsDto>(execute(get("api/channels")))
+
+    suspend fun channels(): List<Channel> = channelsDto().toDomain()
+
+    suspend fun timetable(
+        start: Instant,
+        end: Instant,
+        channelType: String? = null,
+    ): Timetable {
+        val formatter = DateTimeFormatter.ISO_INSTANT
+        return json.decodeFromString<TimeTableDto>(
+            execute(
+                get(
+                    "api/programs/timetable",
+                    listOf(
+                        "start_time" to formatter.format(start),
+                        "end_time" to formatter.format(end),
+                        "channel_type" to channelType,
+                    ),
+                ),
+            ),
+        ).toDomain()
+    }
+
+    suspend fun recordings(
+        page: Int = 1,
+        order: String = "desc",
+        query: String? = null,
+    ): RecordingsPage {
+        val path = if (query.isNullOrBlank()) "api/videos" else "api/videos/search"
+        val params = buildList {
+            add("order" to order)
+            add("page" to page.toString())
+            if (!query.isNullOrBlank()) add("query" to query)
+        }
+        return json.decodeFromString<RecordedProgramsDto>(
+            execute(get(path, params)),
+        ).toDomain()
+    }
+
+    suspend fun recording(videoId: Int): Recording =
+        json.decodeFromString<RecordedProgramDto>(
+            execute(get("api/videos/$videoId")),
+        ).toDomain()
+
+    suspend fun keepAlive(videoId: Int, quality: Quality, sessionId: String) {
+        execute(
+            request(
+                url(
+                    "api/streams/video/$videoId/${quality.apiName}/keep-alive",
+                    listOf("session_id" to sessionId),
+                ),
+            ).put(ByteArray(0).toRequestBody(null)).build(),
+        )
+    }
+
+    fun logoUrl(displayChannelId: String): String =
+        url("api/channels/$displayChannelId/logo").toString()
+
+    fun thumbnailUrl(videoId: Int): String =
+        url("api/videos/$videoId/thumbnail").toString()
+
+    fun liveStreamUrl(channel: Channel, quality: Quality): String =
+        url("api/streams/live/${channel.displayId}/${quality.apiName}/mpegts").toString()
+
+    fun videoStreamUrl(videoId: Int, quality: Quality, sessionId: String): String =
+        url(
+            "api/streams/video/$videoId/${quality.apiName}/playlist",
+            listOf("session_id" to sessionId, "type" to "master"),
+        ).toString()
+
+    // --- 内部 ---
+
+    private fun get(path: String, params: List<Pair<String, String?>> = emptyList()): Request =
+        request(url(path, params)).build()
+
+    private fun request(url: HttpUrl): Request.Builder = Request.Builder().url(url)
+
+    private fun url(path: String, params: List<Pair<String, String?>> = emptyList()): HttpUrl {
+        val builder = baseUrl.newBuilder().addPathSegments(path.trimStart('/'))
+        params.forEach { (key, value) -> if (value != null) builder.addQueryParameter(key, value) }
+        return builder.build()
+    }
+
+    private suspend fun execute(request: Request): String = suspendCancellableCoroutine { continuation ->
+        val call = client.newCall(request)
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (continuation.isActive) {
+                    continuation.resumeWithException(ApiException(0, e.message ?: "network error", e))
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use { res ->
+                    val body = res.body?.string().orEmpty()
+                    if (!res.isSuccessful) {
+                        val detail = runCatching {
+                            json.decodeFromString<ApiErrorDto>(body).detail
+                        }.getOrNull().orEmpty()
+                        if (continuation.isActive) {
+                            continuation.resumeWithException(
+                                ApiException(res.code, detail.ifBlank { res.message }, null),
+                            )
+                        }
+                    } else if (continuation.isActive) {
+                        continuation.resume(body)
+                    }
+                }
+            }
+        })
+    }
+
+    companion object {
+        /** 入力された URL を API のベース URL に正規化する。失敗したら null。 */
+        fun normalizeServerUrl(raw: String): String? {
+            val trimmed = raw.trim()
+            if (trimmed.isEmpty()) return null
+            val withScheme = when {
+                trimmed.startsWith("http://", ignoreCase = true) -> trimmed
+                trimmed.startsWith("https://", ignoreCase = true) -> trimmed
+                trimmed.contains("://") -> return null
+                else -> "http://$trimmed"
+            }
+            val parsed = withScheme.toHttpUrlOrNull() ?: return null
+            if (parsed.host.isBlank()) return null
+            val builder = parsed.newBuilder().query(null).fragment(null)
+            var path = parsed.encodedPath.trimEnd('/')
+            if (path.endsWith("/api")) path = path.removeSuffix("/api")
+            builder.encodedPath(if (path.isBlank()) "/" else path)
+            return builder.build().toString().trimEnd('/')
+        }
+    }
+}

@@ -1,0 +1,18 @@
+Miteru is an unofficial Android client for your self-hosted KonomiTV server.
+
+LIVE TV
+Tap a channel to start watching. Each card shows the current and next programme, viewer count and how far the broadcast has progressed. Search channels and filter by terrestrial, BS or CS.
+
+PROGRAM GUIDE
+Scroll a 24-hour grid with a fixed channel column. Switch between today, tomorrow and the day after, zoom the time scale, jump back to the current time, and open a programme for its description, genres and reservation status.
+
+RECORDINGS
+Browse recordings with thumbnails, search by title, filter MPEG-TS or MP4, sort by date, and resume from where you stopped.
+
+PLAYER
+Quality switching, primary and secondary audio, picture-in-picture, background playback with a media notification, double-tap to seek 10 seconds, and channel zapping while watching live TV.
+
+PRIVACY
+No ads, no analytics, no tracking. The only network destination is the KonomiTV server you configure.
+
+KonomiTV is a project by tsukumijima. Miteru is an unofficial client and is not affiliated with the upstream project.
