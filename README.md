@@ -6,11 +6,11 @@
 [![Android 10+](https://img.shields.io/badge/Android-10%2B-3DDC84?style=for-the-badge&logo=android&logoColor=white)](#動作環境)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](#)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)](#)
-[![F-Droid](https://img.shields.io/badge/F--Droid-submission%20in%20progress-1976D2?style=for-the-badge&logo=fdroid&logoColor=white)](#f-droid)
+[![F-Droid](https://img.shields.io/badge/F--Droid-2027%20target-1976D2?style=for-the-badge&logo=fdroid&logoColor=white)](#f-droid)
 
 # Miteru
 
-**KonomiTV のための非公式 Android クライアント。** 自宅の KonomiTV サーバーを、スマートフォンから「見る」ことに集中して使えるように作りました。ライブ、番組表、録画、そして片手で扱えるプレイヤーが一つになっています。
+**KonomiTV のための非公式 Android クライアント。** 自宅の KonomiTV サーバーを、スマートフォンから「見る」ことに集中して使えるように作りました。ライブ、番組表、録画予約、録画、ニコニコ実況コメント、そして片手で扱えるプレイヤーが一つになっています。
 
 > KonomiTV は [tsukumijima](https://github.com/tsukumijima/KonomiTV) 氏のプロジェクトです。Miteru は**非公式**のサードパーティクライアントであり、本家とは一切関係ありません。
 
@@ -27,6 +27,16 @@
 - 今日 / 明日 / 明後日の切り替え、表示倍率の変更（1 時間 140〜360dp）
 - 「現在」ボタンで現在時刻へジャンプ、赤い現在時刻ライン
 - 番組詳細（ジャンル・詳細情報・予約状態）、放送中の番組はそのまま視聴
+
+### 録画予約（EDCB バックエンド）
+- 番組表の番組詳細から「録画予約」、予約済みなら「予約を取消」
+- 予約タブで一覧・有効/無効の切り替え・取消
+- 録画中 / チューナー不足（一部・全編不可）の状態表示
+
+### ニコニコ実況
+- ライブ視聴中は NX-Jikkyo のコメントをリアルタイム表示
+- 録画再生中は過去ログコメントを再生位置に合わせて表示
+- 色・サイズ・上下固定に対応。設定でオフにできます
 
 ### 録画
 - サムネイル付きの録画一覧、タイトル検索、MPEG-TS / MP4 フィルタ、新しい順 / 古い順
