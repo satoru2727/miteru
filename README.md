@@ -50,11 +50,11 @@
 
 - Android 10 (API 29) 以上
 - KonomiTV サーバー（API を公開しているもの。0.14 系の API スキーマを対象に実装）
-- バックエンドは Mirakurun / EDCB のどちらでも可（録画予約の作成は EDCB 限定のため、本アプリでは Web UI を案内）
+- バックエンドは Mirakurun / EDCB のどちらでも可（録画予約の作成・取消は EDCB 限定）
 
-## インストール
+## ビルド
 
-F-Droid への掲載を準備中です。それまではソースからビルドしてください。
+ソースからビルドする場合:
 
 ```bash
 export JAVA_HOME="$HOME/.local/share/mise/installs/java/temurin-21.0.13+9.0.LTS"
@@ -68,7 +68,11 @@ export JAVA_HOME="$HOME/.local/share/mise/installs/java/temurin-21.0.13+9.0.LTS"
 
 - **GitHub Releases（署名済み・Obtainium 対応）**: <https://github.com/satoru2727/miteru/releases>
   - Obtainium に `https://github.com/satoru2727/miteru` を追加
-- **F-Droid**: MR レビュー待ち — <https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55873>
+- **F-Droid**: 2027-02 に再提出予定（前回は 3 ヶ月メンテナンス実績の不足でクローズ）
+
+## ロードマップ
+
+今後の予定・配布方針は [ROADMAP.md](ROADMAP.md) を参照してください。
 
 ## リリース（GitHub / Obtainium）
 

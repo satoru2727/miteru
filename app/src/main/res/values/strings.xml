@@ -5,6 +5,7 @@
     <!-- Navigation -->
     <string name="nav_live">ライブ</string>
     <string name="nav_guide">番組表</string>
+    <string name="nav_reservations">予約</string>
     <string name="nav_recordings">録画</string>
     <string name="nav_settings">設定</string>
 
@@ -50,7 +51,28 @@
     <string name="guide_recording">録画中</string>
     <string name="guide_watch_now">今すぐ見る</string>
     <string name="guide_zoom_in">拡大</string>
-    <string name="guide_reserve_hint">録画予約は KonomiTV の Web UI から行えます。</string>
+    <string name="guide_reserve_hint">録画予約は EDCB バックエンドでのみ利用できます。</string>
+    <string name="guide_reserve">録画予約</string>
+    <string name="guide_cancel_reservation">予約を取消</string>
+    <string name="guide_reserving">処理中…</string>
+    <string name="guide_reserve_failed">予約に失敗しました</string>
+    <string name="reservations_title">予約</string>
+    <string name="reservations_count">%1$d 件</string>
+    <string name="reservations_empty">予約はありません</string>
+    <string name="reservations_empty_hint">番組表から番組を選んで録画予約できます。</string>
+    <string name="reservations_open_guide">番組表を開く</string>
+    <string name="reservations_edcb_only">録画予約は EDCB バックエンドの KonomiTV でのみ利用できます。</string>
+    <string name="reservations_reserved">予約済み</string>
+    <string name="reservations_recording">録画中</string>
+    <string name="reservations_partial">チューナー不足（一部）</string>
+    <string name="reservations_unavailable">チューナー不足</string>
+    <string name="reservations_disabled">無効</string>
+    <string name="reservations_priority">優先度 %1$d</string>
+    <string name="reservations_unknown_program">番組情報を取得できません</string>
+    <string name="reservations_delete_title">予約を取消しますか？</string>
+    <string name="reservations_delete_confirm">取消</string>
+    <string name="action_cancel">キャンセル</string>
+    <string name="action_refresh">更新</string>
     <string name="guide_zoom_out">縮小</string>
 
     <!-- Recordings -->
@@ -102,7 +124,9 @@
     <string name="settings_mobile_warning">モバイル通信時に確認する</string>
     <string name="settings_mobile_warning_desc">従量制ネットワークで再生する前に警告します</string>
     <string name="settings_resume">続きから再生</string>
-    <string name="settings_resume_desc">前回の視聴位置を記憶します</string>
+    <string name="settings_resume_desc">前回の視聴位置を記憶します。</string>
+        <string name="settings_comments">ニコニコ実況コメント</string>
+        <string name="settings_comments_desc">再生中に実況コメントを重ねて表示します。</string>
     <string name="settings_appearance">外観</string>
     <string name="settings_theme">テーマ</string>
     <string name="settings_theme_system">システム</string>

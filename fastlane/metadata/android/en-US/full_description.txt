@@ -6,6 +6,12 @@ Tap a channel to start watching. Each card shows the current and next programme,
 PROGRAM GUIDE
 Scroll a 24-hour grid with a fixed channel column. Switch between today, tomorrow and the day after, zoom the time scale, jump back to the current time, and open a programme for its description, genres and reservation status.
 
+RECORDING RESERVATIONS (EDCB BACKEND)
+Add a reservation from a programme's detail sheet, then manage it in the Reservations tab: enable, disable, or cancel. Requires a KonomiTV server using the EDCB backend.
+
+NICONICO LIVE COMMENTS
+Overlay NX-Jikkyo comments while watching live TV, and past comments while playing a recording. Can be turned off in Settings.
+
 RECORDINGS
 Browse recordings with thumbnails, search by title, filter MPEG-TS or MP4, sort by date, and resume from where you stopped.
 

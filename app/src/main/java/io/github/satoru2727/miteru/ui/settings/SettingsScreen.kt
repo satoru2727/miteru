@@ -149,6 +149,17 @@ fun SettingsScreen(
                         )
                     },
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                SettingRow(
+                    title = stringResource(R.string.settings_comments),
+                    subtitle = stringResource(R.string.settings_comments_desc),
+                    trailing = {
+                        Switch(
+                            checked = current.showComments,
+                            onCheckedChange = vm::setShowComments,
+                        )
+                    },
+                )
             }
         }
 

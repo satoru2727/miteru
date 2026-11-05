@@ -1,0 +1,4 @@
+- Recording reservations (EDCB backend): add from the guide, list, enable/disable, cancel
+- Niconico live comments (live and recorded playback)
+- New "Niconico live comments" setting
+- New Reservations tab

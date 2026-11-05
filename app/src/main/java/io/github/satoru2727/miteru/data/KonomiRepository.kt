@@ -4,6 +4,7 @@ import io.github.satoru2727.miteru.core.model.Channel
 import io.github.satoru2727.miteru.core.model.Fetched
 import io.github.satoru2727.miteru.core.model.Recording
 import io.github.satoru2727.miteru.core.model.RecordingsPage
+import io.github.satoru2727.miteru.core.model.ReservationsPage
 import io.github.satoru2727.miteru.core.model.ServerInfo
 import io.github.satoru2727.miteru.core.model.Timetable
 import io.github.satoru2727.miteru.core.net.KonomiApi
@@ -84,7 +85,6 @@ class KonomiRepository(
         val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
         return try {
             val dto = api.channelsDto()
-            android.util.Log.d("Miteru", "channels loaded: ${dto.GR.size + dto.BS.size + dto.CS.size}")
             val now = System.currentTimeMillis()
             settings.cacheChannels(json.encodeToString(LiveChannelsDto.serializer(), dto), now)
             _lastChannelRefresh.value = now
@@ -121,6 +121,26 @@ class KonomiRepository(
     ): Result<RecordingsPage> {
         val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
         return runCatching { api.recordings(page, order, query) }
+    }
+
+    suspend fun loadReservations(): Result<ReservationsPage> {
+        val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
+        return runCatching { api.reservations() }
+    }
+
+    suspend fun addReservation(programId: String): Result<Unit> {
+        val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
+        return runCatching { api.addReservation(programId) }
+    }
+
+    suspend fun deleteReservation(id: Int): Result<Unit> {
+        val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
+        return runCatching { api.deleteReservation(id) }
+    }
+
+    suspend fun setReservationEnabled(id: Int, enabled: Boolean): Result<Unit> {
+        val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
+        return runCatching { api.setReservationEnabled(id, enabled) }
     }
 
     suspend fun loadRecording(id: Int): Result<Recording> {

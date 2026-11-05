@@ -3,7 +3,9 @@ package io.github.satoru2727.miteru.core.net
 import io.github.satoru2727.miteru.core.model.Channel
 import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.core.model.Recording
+import io.github.satoru2727.miteru.core.model.JikkyoComment
 import io.github.satoru2727.miteru.core.model.RecordingsPage
+import io.github.satoru2727.miteru.core.model.ReservationsPage
 import io.github.satoru2727.miteru.core.model.ServerInfo
 import io.github.satoru2727.miteru.core.model.Timetable
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -11,6 +13,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -82,6 +85,54 @@ class KonomiApi(
         ).toDomain()
     }
 
+    suspend fun jikkyoInfo(channelId: String): JikkyoInfoDto =
+        json.decodeFromString(execute(get("api/channels/$channelId/jikkyo")))
+
+    suspend fun jikkyoComments(videoId: Int): List<JikkyoComment> =
+        json.decodeFromString<JikkyoCommentsDto>(
+            execute(get("api/videos/$videoId/jikkyo")),
+        ).comments.map { it.toDomain() }
+
+    suspend fun reservations(): ReservationsPage =
+        json.decodeFromString<ReservationsDto>(
+            execute(get("api/recording/reservations")),
+        ).toDomain()
+
+    suspend fun addReservation(programId: String) {
+        val payload = ReservationAddRequestDto(
+            program_id = programId,
+            record_settings = RecordSettingsDto(),
+        )
+        execute(
+            jsonRequest(
+                "api/recording/reservations",
+                "POST",
+                json.encodeToString(ReservationAddRequestDto.serializer(), payload),
+            ),
+        )
+    }
+
+    suspend fun deleteReservation(id: Int) {
+        execute(request(url("api/recording/reservations/$id")).delete().build())
+    }
+
+    /** 既存の録画設定を保持したまま有効/無効だけを切り替える。 */
+    suspend fun setReservationEnabled(id: Int, enabled: Boolean) {
+        val current = json.decodeFromString<ReservationsDto>(
+            execute(get("api/recording/reservations")),
+        ).reservations.firstOrNull { it.id == id }
+            ?: throw ApiException(404, "reservation not found")
+        val settings = (current.record_settings ?: RecordSettingsDto()).copy(is_enabled = enabled)
+        val payload = ReservationUpdateRequestDto(record_settings = settings)
+        execute(
+            jsonRequest(
+                "api/recording/reservations/$id",
+                "PUT",
+                json.encodeToString(ReservationUpdateRequestDto.serializer(), payload),
+            ),
+        )
+    }
+
     suspend fun recording(videoId: Int): Recording =
         json.decodeFromString<RecordedProgramDto>(
             execute(get("api/videos/$videoId")),
@@ -119,6 +170,11 @@ class KonomiApi(
         request(url(path, params)).build()
 
     private fun request(url: HttpUrl): Request.Builder = Request.Builder().url(url)
+
+    private fun jsonRequest(path: String, method: String, body: String): Request =
+        request(url(path))
+            .method(method, body.toRequestBody("application/json".toMediaType()))
+            .build()
 
     private fun url(path: String, params: List<Pair<String, String?>> = emptyList()): HttpUrl {
         val builder = baseUrl.newBuilder().addPathSegments(path.trimStart('/'))

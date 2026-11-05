@@ -108,6 +108,8 @@ fun EmptyState(
     message: String,
     modifier: Modifier = Modifier,
     icon: @Composable (() -> Unit)? = null,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -141,6 +143,12 @@ fun EmptyState(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        if (actionLabel != null && onAction != null) {
+            Spacer(Modifier.height(18.dp))
+            Button(onClick = onAction, shape = RoundedCornerShape(14.dp)) {
+                Text(actionLabel)
+            }
+        }
     }
 }
 

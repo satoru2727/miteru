@@ -35,6 +35,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -51,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +65,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.satoru2727.miteru.R
 import io.github.satoru2727.miteru.core.model.Channel
@@ -239,6 +242,8 @@ fun GuideScreen(vm: AppViewModel) {
                 selected = null
                 vm.requestPlayChannel(row.channel)
             },
+            onReserve = { vm.reserve(program) },
+            onCancelReservation = { id -> vm.cancelReservation(id) },
         )
     }
 }
@@ -517,8 +522,14 @@ private fun ProgramSheet(
     isPlaying: Boolean,
     onDismiss: () -> Unit,
     onWatch: () -> Unit,
+    onReserve: suspend () -> Result<Unit>,
+    onCancelReservation: suspend (Int) -> Result<Unit>,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    var working by remember { mutableStateOf(false) }
+    var reserveError by remember { mutableStateOf<String?>(null) }
+    val failedMessage = stringResource(R.string.guide_reserve_failed)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -629,6 +640,58 @@ private fun ProgramSheet(
             }
 
             if (isEdcb) {
+                Spacer(Modifier.height(8.dp))
+                val reservation = program.reservation
+                if (reservation != null) {
+                    OutlinedButton(
+                        onClick = {
+                            if (working) return@OutlinedButton
+                            scope.launch {
+                                working = true
+                                reserveError = null
+                                val result = onCancelReservation(reservation.id)
+                                working = false
+                                if (result.isSuccess) onDismiss() else {
+                                    reserveError = result.exceptionOrNull()?.message ?: failedMessage
+                                }
+                            }
+                        },
+                        enabled = !working,
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Text(if (working) stringResource(R.string.guide_reserving) else stringResource(R.string.guide_cancel_reservation))
+                    }
+                } else if (!program.end.isBefore(java.time.Instant.now())) {
+                    Button(
+                        onClick = {
+                            if (working) return@Button
+                            scope.launch {
+                                working = true
+                                reserveError = null
+                                val result = onReserve()
+                                working = false
+                                if (result.isSuccess) onDismiss() else {
+                                    reserveError = result.exceptionOrNull()?.message ?: failedMessage
+                                }
+                            }
+                        },
+                        enabled = !working,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Text(if (working) stringResource(R.string.guide_reserving) else stringResource(R.string.guide_reserve))
+                    }
+                }
+                if (reserveError != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = reserveError.orEmpty(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            } else {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.guide_reserve_hint),

@@ -6,6 +6,7 @@ import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import io.github.satoru2727.miteru.core.settings.SettingsStore
+import io.github.satoru2727.miteru.data.JikkyoRepository
 import io.github.satoru2727.miteru.data.KonomiRepository
 import io.github.satoru2727.miteru.player.PlaybackLauncher
 import kotlinx.serialization.json.Json
@@ -31,6 +32,7 @@ class AppContainer(context: Context) {
 
     val settings: SettingsStore = SettingsStore(appContext)
     val repository: KonomiRepository = KonomiRepository(settings, httpClient, json)
+    val jikkyo: JikkyoRepository = JikkyoRepository(repository, httpClient, json)
     val playback: PlaybackLauncher = PlaybackLauncher(appContext, repository, settings)
 
     val imageLoader: ImageLoader = ImageLoader.Builder(appContext)

@@ -126,6 +126,35 @@ data class RecordingsPage(
     val items: List<Recording>,
 )
 
+/** 録画予約 1 件。program / channel は KonomiTV 側で解決できなかった場合に null になりうる。 */
+data class ReservationItem(
+    val id: Int,
+    val channel: Channel?,
+    val program: Program?,
+    val isRecording: Boolean,
+    val availability: String,
+    val comment: String,
+    val estimatedFileSize: Long,
+    val isEnabled: Boolean,
+    val priority: Int,
+) {
+    val isPartial: Boolean get() = availability == "Partial"
+    val isUnavailable: Boolean get() = availability == "Unavailable"
+}
+
+data class JikkyoComment(
+    val text: String,
+    val type: String,
+    val size: String,
+    val color: String,
+    val timeSeconds: Double,
+)
+
+data class ReservationsPage(
+    val total: Int,
+    val items: List<ReservationItem>,
+)
+
 data class TimetableChannel(
     val channel: Channel,
     val programs: List<Program>,

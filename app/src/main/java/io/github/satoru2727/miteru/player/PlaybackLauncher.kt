@@ -253,6 +253,9 @@ class PlaybackLauncher(
             .build()
     }
 
+    /** 現在の再生位置（コメントの同期に使う）。 */
+    fun positionMs(): Long = controller?.currentPosition?.coerceAtLeast(0L) ?: 0L
+
     fun stop() {
         val player = controller
         val videoId = activeVideoId

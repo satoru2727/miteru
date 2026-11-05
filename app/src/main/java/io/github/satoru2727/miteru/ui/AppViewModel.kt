@@ -7,8 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.satoru2727.miteru.AppContainer
 import io.github.satoru2727.miteru.core.model.Channel
+import io.github.satoru2727.miteru.core.model.JikkyoComment
+import io.github.satoru2727.miteru.core.model.Program
 import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.core.model.Recording
+import io.github.satoru2727.miteru.core.model.ReservationItem
 import io.github.satoru2727.miteru.core.model.ServerInfo
 import io.github.satoru2727.miteru.core.model.Timetable
 import io.github.satoru2727.miteru.core.net.KonomiApi
@@ -17,16 +20,18 @@ import io.github.satoru2727.miteru.core.settings.ThemeMode
 import io.github.satoru2727.miteru.core.util.isMeteredNetwork
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
 
-enum class Tab { LIVE, GUIDE, RECORDINGS, SETTINGS }
+enum class Tab { LIVE, GUIDE, RESERVATIONS, RECORDINGS, SETTINGS }
 
 enum class ChannelFilter { ALL, GR, BS, CS, OTHER }
 
@@ -63,6 +68,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     var showPlayer by mutableStateOf(false)
         private set
 
+    /** 再生中のコメント購読。null ならコメント無効。 */
+    var commentFlow by mutableStateOf<Flow<JikkyoComment>?>(null)
+        private set
+
     fun openPlayer() {
         showPlayer = true
         playback.playerVisible = true
@@ -84,6 +93,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     var guideFilter by mutableStateOf(GuideFilter.GR)
         private set
     private val guideCache = mutableMapOf<LocalDate, Timetable>()
+
+    // 録画予約
+    var reservationsState by mutableStateOf<LoadState<List<ReservationItem>>>(LoadState.Idle)
+        private set
 
     // 録画
     var recordingsState by mutableStateOf<LoadState<List<Recording>>>(LoadState.Idle)
@@ -135,6 +148,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         tab = next
         when (next) {
             Tab.GUIDE -> if (guideState is LoadState.Idle) loadGuide()
+            Tab.RESERVATIONS -> if (reservationsState is LoadState.Idle) loadReservations()
             Tab.RECORDINGS -> {
                 if (recordingsState is LoadState.Idle) loadRecordings()
                 viewModelScope.launch { resumePositions = settingsStore.positions() }
@@ -207,6 +221,41 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun changeGuideFilter(filter: GuideFilter) {
         guideFilter = filter
     }
+
+    // ---- 録画予約 ----
+
+    fun loadReservations(force: Boolean = false) {
+        viewModelScope.launch {
+            if (force || reservationsState !is LoadState.Success) {
+                reservationsState = LoadState.Loading
+            }
+            repository.loadReservations()
+                .onSuccess { reservationsState = LoadState.Success(it.items) }
+                .onFailure { error ->
+                    if (reservationsState !is LoadState.Success) {
+                        reservationsState = LoadState.Failure(error)
+                    }
+                }
+        }
+    }
+
+    /** 番組表の番組を録画予約する。EDCB バックエンドでのみ成功する。 */
+    suspend fun reserve(program: Program): Result<Unit> =
+        repository.addReservation(program.id).onSuccess {
+            loadReservations(force = true)
+            loadGuide(force = true)
+        }
+
+    suspend fun cancelReservation(id: Int): Result<Unit> =
+        repository.deleteReservation(id).onSuccess {
+            loadReservations(force = true)
+            loadGuide(force = true)
+        }
+
+    suspend fun setReservationEnabled(id: Int, enabled: Boolean): Result<Unit> =
+        repository.setReservationEnabled(id, enabled).onSuccess {
+            loadReservations(force = true)
+        }
 
     // ---- 録画 ----
 
@@ -298,6 +347,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private fun playChannel(channel: Channel) {
         viewModelScope.launch {
             if (playback.playLive(channel, currentSettings.defaultQuality)) {
+                commentFlow = if (currentSettings.showComments) {
+                    container.jikkyo.live(channel.id)
+                } else {
+                    null
+                }
                 openPlayer()
             }
         }
@@ -336,8 +390,27 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     private fun startRecording(recording: Recording, positionMs: Long) {
         viewModelScope.launch {
             if (playback.playRecording(recording, currentSettings.defaultQuality, positionMs)) {
+                commentFlow = if (currentSettings.showComments) {
+                    recordedComments(recording.id)
+                } else {
+                    null
+                }
                 openPlayer()
             }
+        }
+    }
+
+    /** 録画の再生位置に合わせて過去ログコメントを流す。 */
+    private fun recordedComments(videoId: Int): Flow<JikkyoComment> = flow {
+        val comments = container.jikkyo.recorded(videoId).sortedBy { it.timeSeconds }
+        var index = 0
+        while (true) {
+            val positionSeconds = playback.positionMs() / 1000.0
+            while (index < comments.size && comments[index].timeSeconds <= positionSeconds) {
+                emit(comments[index])
+                index += 1
+            }
+            delay(250)
         }
     }
 
@@ -359,6 +432,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun stopPlayback() {
         playback.stop()
+        commentFlow = null
         showPlayer = false
         playback.playerVisible = false
         viewModelScope.launch { resumePositions = settingsStore.positions() }
@@ -401,6 +475,24 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { settingsStore.setResumePlayback(enabled) }
     }
 
+    fun setShowComments(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setShowComments(enabled) }
+        if (!enabled) {
+            commentFlow = null
+        } else {
+            val now = nowPlaying.value ?: return
+            commentFlow = when {
+                now.isLive && now.channelId != null -> {
+                    val channel = (channelsState as? LoadState.Success)?.value
+                        ?.firstOrNull { it.displayId == now.channelId }
+                    channel?.let { container.jikkyo.live(it.id) }
+                }
+                now.videoId != null -> recordedComments(now.videoId)
+                else -> null
+            }
+        }
+    }
+
     fun clearCache() {
         viewModelScope.launch {
             repository.clearChannelCache()
@@ -426,7 +518,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             channelsState = LoadState.Idle
             guideState = LoadState.Idle
             recordingsState = LoadState.Idle
+            reservationsState = LoadState.Idle
             guideCache.clear()
+            commentFlow = null
             showPlayer = false
             playback.playerVisible = false
             tab = Tab.LIVE

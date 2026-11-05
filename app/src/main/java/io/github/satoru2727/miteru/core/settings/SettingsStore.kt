@@ -24,6 +24,7 @@ data class Settings(
     val defaultQuality: Quality = Quality.Q1080P,
     val warnOnMobileData: Boolean = true,
     val resumePlayback: Boolean = true,
+    val showComments: Boolean = true,
     val cachedChannelsAt: Long = 0L,
     val playbackActive: Boolean = false,
 ) {
@@ -46,6 +47,7 @@ class SettingsStore(private val context: Context) {
         val QUALITY = stringPreferencesKey("default_quality")
         val WARN_MOBILE = booleanPreferencesKey("warn_mobile")
         val RESUME = booleanPreferencesKey("resume_playback")
+        val SHOW_COMMENTS = booleanPreferencesKey("show_comments")
         val CHANNELS_JSON = stringPreferencesKey("channels_cache_json")
         val CHANNELS_AT = longPreferencesKey("channels_cache_at")
         val POSITIONS = stringPreferencesKey("resume_positions")
@@ -62,6 +64,7 @@ class SettingsStore(private val context: Context) {
             defaultQuality = Quality.fromApiName(prefs[Keys.QUALITY]) ?: Quality.Q1080P,
             warnOnMobileData = prefs[Keys.WARN_MOBILE] ?: true,
             resumePlayback = prefs[Keys.RESUME] ?: true,
+            showComments = prefs[Keys.SHOW_COMMENTS] ?: true,
             cachedChannelsAt = prefs[Keys.CHANNELS_AT] ?: 0L,
             playbackActive = prefs[Keys.PLAYBACK_ACTIVE] ?: false,
         )
@@ -93,6 +96,10 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setResumePlayback(enabled: Boolean) {
         context.miteruDataStore.edit { it[Keys.RESUME] = enabled }
+    }
+
+    suspend fun setShowComments(enabled: Boolean) {
+        context.miteruDataStore.edit { it[Keys.SHOW_COMMENTS] = enabled }
     }
 
     suspend fun cacheChannels(json: String, cachedAt: Long) {

@@ -157,6 +157,8 @@ fun PlayerScreen(vm: AppViewModel) {
         ?.filter { it.type == C.TRACK_TYPE_AUDIO }
         .orEmpty()
 
+    val commentFlow = vm.commentFlow
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (controller != null) {
             AndroidView(
@@ -170,6 +172,10 @@ fun PlayerScreen(vm: AppViewModel) {
                 update = { it.player = controller },
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+
+        commentFlow?.let { flow ->
+            CommentOverlay(comments = flow, modifier = Modifier.fillMaxSize())
         }
 
         BoxWithConstraints(Modifier.fillMaxSize()) {

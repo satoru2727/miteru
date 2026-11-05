@@ -5,6 +5,7 @@
     <!-- Navigation -->
     <string name="nav_live">Live</string>
     <string name="nav_guide">Guide</string>
+    <string name="nav_reservations">Reservations</string>
     <string name="nav_recordings">Recordings</string>
     <string name="nav_settings">Settings</string>
 
@@ -50,7 +51,28 @@
     <string name="guide_recording">Recording</string>
     <string name="guide_watch_now">Watch now</string>
     <string name="guide_zoom_in">Zoom in</string>
-    <string name="guide_reserve_hint">Scheduling is done from the KonomiTV web UI.</string>
+    <string name="guide_reserve_hint">Recording reservations require the EDCB backend.</string>
+    <string name="guide_reserve">Record</string>
+    <string name="guide_cancel_reservation">Cancel reservation</string>
+    <string name="guide_reserving">Working…</string>
+    <string name="guide_reserve_failed">Could not create the reservation</string>
+    <string name="reservations_title">Reservations</string>
+    <string name="reservations_count">%1$d items</string>
+    <string name="reservations_empty">No reservations</string>
+    <string name="reservations_empty_hint">Pick a program in the guide to schedule a recording.</string>
+    <string name="reservations_open_guide">Open guide</string>
+    <string name="reservations_edcb_only">Recording reservations are available only with the EDCB backend.</string>
+    <string name="reservations_reserved">Reserved</string>
+    <string name="reservations_recording">Recording</string>
+    <string name="reservations_partial">Tuner shortage (partial)</string>
+    <string name="reservations_unavailable">Tuner shortage</string>
+    <string name="reservations_disabled">Disabled</string>
+    <string name="reservations_priority">Priority %1$d</string>
+    <string name="reservations_unknown_program">Program information unavailable</string>
+    <string name="reservations_delete_title">Cancel this reservation?</string>
+    <string name="reservations_delete_confirm">Cancel it</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_refresh">Refresh</string>
     <string name="guide_zoom_out">Zoom out</string>
 
     <!-- Recordings -->
@@ -102,7 +124,9 @@
     <string name="settings_mobile_warning">Warn on mobile data</string>
     <string name="settings_mobile_warning_desc">Ask before streaming over a metered network</string>
     <string name="settings_resume">Resume playback</string>
-    <string name="settings_resume_desc">Remember the last playback position</string>
+    <string name="settings_resume_desc">Remembers the last playback position.</string>
+        <string name="settings_comments">Niconico live comments</string>
+        <string name="settings_comments_desc">Overlay live commentary while playing.</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_theme_system">System</string>

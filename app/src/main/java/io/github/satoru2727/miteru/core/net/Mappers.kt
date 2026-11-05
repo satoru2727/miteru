@@ -3,9 +3,12 @@ package io.github.satoru2727.miteru.core.net
 import io.github.satoru2727.miteru.core.model.Channel
 import io.github.satoru2727.miteru.core.model.ChannelType
 import io.github.satoru2727.miteru.core.model.Genre
+import io.github.satoru2727.miteru.core.model.JikkyoComment
 import io.github.satoru2727.miteru.core.model.Program
 import io.github.satoru2727.miteru.core.model.Recording
 import io.github.satoru2727.miteru.core.model.RecordingsPage
+import io.github.satoru2727.miteru.core.model.ReservationItem
+import io.github.satoru2727.miteru.core.model.ReservationsPage
 import io.github.satoru2727.miteru.core.model.Reservation
 import io.github.satoru2727.miteru.core.model.ServerInfo
 import io.github.satoru2727.miteru.core.model.Timetable
@@ -39,6 +42,41 @@ fun ReservationDto.toDomain(): Reservation = Reservation(
     id = id,
     status = status,
     availability = recording_availability,
+)
+
+fun ReservationItemDto.toDomain(): ReservationItem = ReservationItem(
+    id = id,
+    channel = channel?.toDomain(),
+    program = program?.toDomain(),
+    isRecording = is_recording_in_progress,
+    availability = recording_availability,
+    comment = comment,
+    estimatedFileSize = estimated_recording_file_size,
+    isEnabled = record_settings?.is_enabled ?: true,
+    priority = record_settings?.priority ?: 3,
+)
+
+private val jikkyoColors = mapOf(
+    "white" to "#FFFFFF", "red" to "#FF4B4B", "pink" to "#FF7BAC",
+    "orange" to "#FF9D00", "yellow" to "#FFE100", "green" to "#4BFF4B",
+    "cyan" to "#00E5FF", "blue" to "#4B8BFF", "purple" to "#C77DFF",
+    "black" to "#000000", "white2" to "#CCCC99", "red2" to "#CC0033",
+    "pink2" to "#FF33CC", "orange2" to "#FF6600", "yellow2" to "#999900",
+    "green2" to "#00CC66", "cyan2" to "#00CCCC", "blue2" to "#3399FF",
+    "purple2" to "#6633CC", "black2" to "#666666",
+)
+
+fun JikkyoCommentDto.toDomain(): JikkyoComment = JikkyoComment(
+    text = text,
+    type = type,
+    size = size,
+    color = if (color.startsWith("#")) color else jikkyoColors[color] ?: "#FFFFFF",
+    timeSeconds = time,
+)
+
+fun ReservationsDto.toDomain(): ReservationsPage = ReservationsPage(
+    total = total,
+    items = reservations.map { it.toDomain() },
 )
 
 fun ProgramDto.toDomain(): Program = Program(

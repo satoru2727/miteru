@@ -31,6 +31,88 @@ data class ReservationDto(
 )
 
 @Serializable
+data class RecordingFolderDto(
+    val recording_folder_path: String = "",
+    val recording_file_name_template: String? = null,
+    val is_oneseg_separate_recording_folder: Boolean = false,
+)
+
+@Serializable
+data class RecordSettingsDto(
+    val is_enabled: Boolean = true,
+    val priority: Int = 3,
+    val recording_folders: List<RecordingFolderDto> = emptyList(),
+    val recording_start_margin: Int? = null,
+    val recording_end_margin: Int? = null,
+    val recording_mode: String = "SpecifiedService",
+    val caption_recording_mode: String = "Default",
+    val data_broadcasting_recording_mode: String = "Default",
+    val post_recording_mode: String = "Default",
+    val post_recording_bat_file_path: String? = null,
+    val is_event_relay_follow_enabled: Boolean = true,
+    val is_exact_recording_enabled: Boolean = false,
+    val is_oneseg_separate_output_enabled: Boolean = false,
+    val is_sequential_recording_in_single_file_enabled: Boolean = false,
+    val forced_tuner_id: Int? = null,
+)
+
+@Serializable
+data class ReservationItemDto(
+    val id: Int = 0,
+    val channel: ChannelDto? = null,
+    val program: ProgramDto? = null,
+    val is_recording_in_progress: Boolean = false,
+    val recording_availability: String = "Full",
+    val comment: String = "",
+    val scheduled_recording_file_name: String = "",
+    val estimated_recording_file_size: Long = 0,
+    val record_settings: RecordSettingsDto? = null,
+)
+
+@Serializable
+data class JikkyoInfoDto(
+    val watch_session_url: String? = null,
+    val nicolive_watch_session_url: String? = null,
+    val nicolive_watch_session_error: String? = null,
+    val comment_session_url: String? = null,
+    val is_nxjikkyo_exclusive: Boolean = false,
+)
+
+@Serializable
+data class JikkyoCommentDto(
+    val time: Double = 0.0,
+    val type: String = "right",
+    val size: String = "medium",
+    val color: String = "white",
+    val author: String = "",
+    val text: String = "",
+)
+
+@Serializable
+data class JikkyoCommentsDto(
+    val is_success: Boolean = false,
+    val comments: List<JikkyoCommentDto> = emptyList(),
+    val detail: String = "",
+)
+
+@Serializable
+data class ReservationsDto(
+    val total: Int = 0,
+    val reservations: List<ReservationItemDto> = emptyList(),
+)
+
+@Serializable
+data class ReservationAddRequestDto(
+    val program_id: String,
+    val record_settings: RecordSettingsDto,
+)
+
+@Serializable
+data class ReservationUpdateRequestDto(
+    val record_settings: RecordSettingsDto,
+)
+
+@Serializable
 data class ProgramDto(
     val id: String = "",
     val channel_id: String = "",

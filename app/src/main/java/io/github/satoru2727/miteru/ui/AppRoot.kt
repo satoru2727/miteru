@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.EventAvailable
 import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.VideoLibrary
@@ -53,6 +54,7 @@ import io.github.satoru2727.miteru.ui.live.LiveScreen
 import io.github.satoru2727.miteru.ui.player.MiniPlayer
 import io.github.satoru2727.miteru.ui.player.PlayerScreen
 import io.github.satoru2727.miteru.ui.recordings.RecordingsScreen
+import io.github.satoru2727.miteru.ui.reservations.ReservationsScreen
 import io.github.satoru2727.miteru.ui.settings.SettingsScreen
 import io.github.satoru2727.miteru.ui.setup.SetupScreen
 import io.github.satoru2727.miteru.ui.theme.KonomiTheme
@@ -126,6 +128,7 @@ private fun MainScreen(
     onChangeServer: () -> Unit,
 ) {
     val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
+    val serverInfo by vm.serverInfo.collectAsStateWithLifecycle()
     val pendingResume = vm.pendingResume
     val pendingMetered = vm.pendingMeteredPlay
     val context = LocalContext.current
@@ -163,6 +166,7 @@ private fun MainScreen(
                                         imageVector = when (tab) {
                                             Tab.LIVE -> Icons.Rounded.LiveTv
                                             Tab.GUIDE -> Icons.Rounded.CalendarMonth
+                                            Tab.RESERVATIONS -> Icons.Rounded.EventAvailable
                                             Tab.RECORDINGS -> Icons.Rounded.VideoLibrary
                                             Tab.SETTINGS -> Icons.Rounded.Settings
                                         },
@@ -175,6 +179,7 @@ private fun MainScreen(
                                             when (tab) {
                                                 Tab.LIVE -> R.string.nav_live
                                                 Tab.GUIDE -> R.string.nav_guide
+                                                Tab.RESERVATIONS -> R.string.nav_reservations
                                                 Tab.RECORDINGS -> R.string.nav_recordings
                                                 Tab.SETTINGS -> R.string.nav_settings
                                             },
@@ -191,6 +196,11 @@ private fun MainScreen(
                 when (vm.tab) {
                     Tab.LIVE -> LiveScreen(vm)
                     Tab.GUIDE -> GuideScreen(vm)
+                    Tab.RESERVATIONS -> ReservationsScreen(
+                        vm = vm,
+                        isEdcb = serverInfo?.isEdcb == true,
+                        onOpenGuide = { vm.selectTab(Tab.GUIDE) },
+                    )
                     Tab.RECORDINGS -> RecordingsScreen(vm)
                     Tab.SETTINGS -> SettingsScreen(vm = vm, onChangeServer = onChangeServer)
                 }
