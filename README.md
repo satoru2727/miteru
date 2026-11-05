@@ -64,6 +64,12 @@ export JAVA_HOME="$HOME/.local/share/mise/installs/java/temurin-21.0.13+9.0.LTS"
 
 `local.properties` に `sdk.dir` を設定し、Android SDK 36 を用意してください。
 
+## インストール
+
+- **GitHub Releases（署名済み・Obtainium 対応）**: <https://github.com/satoru2727/miteru/releases>
+  - Obtainium に `https://github.com/satoru2727/miteru` を追加
+- **F-Droid**: MR レビュー待ち — <https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55873>
+
 ## リリース（GitHub / Obtainium）
 
 署名済み APK を GitHub Releases で配布します。ファイル名は `miteru-<version>-universal.apk` です。
@@ -78,7 +84,7 @@ export JAVA_HOME="$HOME/.local/share/mise/installs/java/temurin-21.0.13+9.0.LTS"
 - `fastlane/metadata/android/{en-US,ja-JP}/` にストア用メタデータ（説明・アイコン・スクリーンショット）を同梱
 - F-Droid は `key.properties` のない状態でビルドし、F-Droid の鍵で署名します
 - `versionCode` / `versionName` は `app/build.gradle.kts`（CI からは Gradle プロパティで上書き）
-- 提出状況: **fdroiddata に MR 提出済み**（レビュー待ち）
+- 提出状況: **fdroiddata に MR 提出済み**（レビュー待ち）— <https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55873>
 
 ## 制限事項
 
