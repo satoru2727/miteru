@@ -222,7 +222,7 @@ fun LiveScreen(vm: AppViewModel) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 28.dp),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
@@ -301,7 +301,7 @@ private fun ChannelCard(
                         text = channel.name,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {

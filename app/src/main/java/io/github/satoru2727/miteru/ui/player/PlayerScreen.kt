@@ -75,6 +75,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import io.github.satoru2727.miteru.R
@@ -84,6 +85,7 @@ import io.github.satoru2727.miteru.ui.util.findActivity
 import io.github.satoru2727.miteru.ui.util.formatClock
 import kotlinx.coroutines.delay
 
+@androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(vm: AppViewModel) {

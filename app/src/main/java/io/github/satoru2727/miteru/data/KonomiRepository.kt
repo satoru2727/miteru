@@ -39,13 +39,6 @@ class KonomiRepository(
     private val _lastChannelRefresh = MutableStateFlow(0L)
     val lastChannelRefresh: StateFlow<Long> = _lastChannelRefresh.asStateFlow()
 
-    /** 直近に使ったサーバー URL から画像 URL を組み立てる（API 呼び出しなし）。 */
-    fun logoUrl(displayChannelId: String): String? =
-        cachedApiUrl?.let { "$it/api/channels/$displayChannelId/logo" }
-
-    fun thumbnailUrl(videoId: Int): String? =
-        cachedApiUrl?.let { "$it/api/videos/$videoId/thumbnail" }
-
     suspend fun api(): KonomiApi? {
         val url = settings.snapshot().serverUrl ?: return null
         return apiLock.withLock {
@@ -91,11 +84,13 @@ class KonomiRepository(
         val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
         return try {
             val dto = api.channelsDto()
+            android.util.Log.d("Miteru", "channels loaded: ${dto.GR.size + dto.BS.size + dto.CS.size}")
             val now = System.currentTimeMillis()
             settings.cacheChannels(json.encodeToString(LiveChannelsDto.serializer(), dto), now)
             _lastChannelRefresh.value = now
             Result.success(Fetched(dto.toDomain()))
         } catch (e: Exception) {
+            android.util.Log.e("Miteru", "loadChannels failed", e)
             val cache = settings.cachedChannels()
             if (cache != null) {
                 val decoded = runCatching {

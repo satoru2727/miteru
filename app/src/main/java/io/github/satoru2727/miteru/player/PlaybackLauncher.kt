@@ -286,7 +286,7 @@ class PlaybackLauncher(
             subtitle = mediaItem.mediaMetadata.artist?.toString(),
             channelId = if (isLive) id else null,
             videoId = if (!isLive) id.toIntOrNull() else null,
-            logoUrl = if (isLive) repository.logoUrl(id) else null,
+            logoUrl = if (isLive) settings.snapshot().serverUrl?.let { "$it/api/channels/$id/logo" } else null,
             quality = Quality.Q1080P,
         )
         _playerState.value = _playerState.value.copy(

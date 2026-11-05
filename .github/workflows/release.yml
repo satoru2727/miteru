@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: "versionName (e.g. 1.0.0)"
+        required: true
+        default: "1.0.0"
+      versionCode:
+        description: "versionCode (integer, must increase)"
+        required: true
+        default: "1"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode the release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/miteru-release.jks"
+          cat > key.properties <<EOF
+          storeFile=$RUNNER_TEMP/miteru-release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ github.event.inputs.versionName }}" >> "$GITHUB_OUTPUT"
+            echo "code=${{ github.event.inputs.versionCode }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "code=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build signed release APK
+        run: |
+          CODE_ARG=""
+          if [ -n "${{ steps.version.outputs.code }}" ]; then
+            CODE_ARG="-PversionCode=${{ steps.version.outputs.code }}"
+          fi
+          ./gradlew --no-daemon assembleRelease \
+            -PversionName="${{ steps.version.outputs.name }}" $CODE_ARG
+
+      - name: Collect the APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk \
+            "dist/miteru-${{ steps.version.outputs.name }}-universal.apk"
+          ls -lh dist
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.name }}
+          name: Miteru ${{ steps.version.outputs.name }}
+          files: dist/*.apk
+          generate_release_notes: true
+          fail_on_unmatched_files: true

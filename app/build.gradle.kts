@@ -1,8 +1,17 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+}
+
+val keyPropertiesFile = rootProject.file("key.properties")
+val keyProperties = Properties().apply {
+    if (keyPropertiesFile.exists()) {
+        keyPropertiesFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -13,9 +22,20 @@ android {
         applicationId = "io.github.satoru2727.miteru"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(1)
+        versionName = providers.gradleProperty("versionName").getOrElse("1.0.0")
         resourceConfigurations += listOf("en", "ja")
+    }
+
+    signingConfigs {
+        create("release") {
+            if (keyPropertiesFile.exists()) {
+                storeFile = file(keyProperties.getProperty("storeFile"))
+                storePassword = keyProperties.getProperty("storePassword")
+                keyAlias = keyProperties.getProperty("keyAlias")
+                keyPassword = keyProperties.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -24,9 +44,13 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
-            // F-Droid signs the release APK itself. No signingConfig here on
-            // purpose: a locally signed release build would be a different
-            // application identity from the published one.
+            // Local/GitHub releases are signed with ~/keys/miteru-release.jks
+            // when key.properties exists. F-Droid builds without that file and
+            // re-signs the APK with its own key, so the two channels have
+            // different application identities.
+            if (keyPropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

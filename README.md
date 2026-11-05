@@ -49,7 +49,7 @@
 ## 動作環境
 
 - Android 10 (API 29) 以上
-- KonomiTV サーバー（API を公開しているもの。0.13 系で動作確認）
+- KonomiTV サーバー（API を公開しているもの。0.14 系の API スキーマを対象に実装）
 - バックエンドは Mirakurun / EDCB のどちらでも可（録画予約の作成は EDCB 限定のため、本アプリでは Web UI を案内）
 
 ## インストール
@@ -64,12 +64,21 @@ export JAVA_HOME="$HOME/.local/share/mise/installs/java/temurin-21.0.13+9.0.LTS"
 
 `local.properties` に `sdk.dir` を設定し、Android SDK 36 を用意してください。
 
+## リリース（GitHub / Obtainium）
+
+署名済み APK を GitHub Releases で配布します。ファイル名は `miteru-<version>-universal.apk` です。
+
+- 署名鍵: リポジトリ外の `~/keys/miteru-release.jks`（4096-bit RSA、10,000 日）
+- CI: `.github/workflows/release.yml` が Secrets（`KEYSTORE_BASE64` / `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD`）で署名
+- ローカル: リポジトリ直下に `key.properties` がある場合だけ release に署名設定が入る
+- **F-Droid 版とは署名が異なります。** F-Droid 版に乗り換えるときは一度アンインストールが必要です（アプリデータは引き継げません）
+
 ## F-Droid
 
-- `fastlane/metadata/android/{en-US,ja-JP}/` にストア用メタデータを同梱
-- `release` ビルドに署名設定を入れていません（F-Droid が署名するため）
-- `versionCode` / `versionName` は `app/build.gradle.kts`
-- 提出状況: **準備中**（スクリーンショットは実機で撮影して追加予定）
+- `fastlane/metadata/android/{en-US,ja-JP}/` にストア用メタデータ（説明・アイコン・スクリーンショット）を同梱
+- F-Droid は `key.properties` のない状態でビルドし、F-Droid の鍵で署名します
+- `versionCode` / `versionName` は `app/build.gradle.kts`（CI からは Gradle プロパティで上書き）
+- 提出状況: **fdroiddata に MR 提出済み**（レビュー待ち）
 
 ## 制限事項
 

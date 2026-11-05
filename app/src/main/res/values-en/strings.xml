@@ -119,7 +119,7 @@
     <string name="settings_fdroid_value">Submission in progress</string>
     <string name="settings_clear_cache">Clear cache</string>
     <string name="settings_clear_cache_desc">Delete cached channel and guide data</string>
-    <string name="settings_disconnect">Change server</string>
+    <string name="settings_disconnect">Disconnect</string>
     <string name="settings_disconnect_confirm">Clear the server setting and return to setup?</string>
     <string name="settings_cancel">Cancel</string>
     <string name="settings_ok">OK</string>

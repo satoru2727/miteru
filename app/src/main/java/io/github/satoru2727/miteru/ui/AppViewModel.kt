@@ -164,9 +164,15 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         channelFilter = value
     }
 
-    fun logoUrl(channel: Channel): String? = repository.logoUrl(channel.displayId)
+    fun logoUrl(channel: Channel): String? {
+        val base = settings.value?.serverUrl ?: return null
+        return "$base/api/channels/${channel.displayId}/logo"
+    }
 
-    fun thumbnailUrl(videoId: Int): String? = repository.thumbnailUrl(videoId)
+    fun thumbnailUrl(videoId: Int): String? {
+        val base = settings.value?.serverUrl ?: return null
+        return "$base/api/videos/$videoId/thumbnail"
+    }
 
     // ---- 番組表 ----
 

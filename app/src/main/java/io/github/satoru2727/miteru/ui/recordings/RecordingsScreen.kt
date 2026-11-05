@@ -51,13 +51,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImagePainter
-import coil3.compose.SubcomposeAsyncImage
-import coil3.compose.SubcomposeAsyncImageContent
+import coil3.request.ImageRequest
+import coil3.compose.AsyncImage
 import io.github.satoru2727.miteru.R
 import io.github.satoru2727.miteru.core.model.Recording
 import io.github.satoru2727.miteru.ui.AppViewModel
 import io.github.satoru2727.miteru.ui.LoadState
+import io.github.satoru2727.miteru.ui.LocalAppImageLoader
 import io.github.satoru2727.miteru.ui.RecordingFilter
 import io.github.satoru2727.miteru.ui.components.EmptyState
 import io.github.satoru2727.miteru.ui.components.ErrorState
@@ -215,7 +217,7 @@ fun RecordingsScreen(vm: AppViewModel) {
                 else -> LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 28.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(visible, key = { it.id }) { recording ->
@@ -271,24 +273,31 @@ private fun RecordingCard(
                     ),
             ) {
                 if (!thumbnailUrl.isNullOrBlank()) {
-                    SubcomposeAsyncImage(
-                        model = thumbnailUrl,
+                    val context = LocalContext.current
+                    val request = remember(thumbnailUrl, context) {
+                        ImageRequest.Builder(context.applicationContext).data(thumbnailUrl).build()
+                    }
+                    var loaded by remember(thumbnailUrl) { mutableStateOf(false) }
+                    if (!loaded) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                Icons.Rounded.VideoLibrary,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                modifier = Modifier.size(24.dp),
+                            )
+                        }
+                    }
+                    AsyncImage(
+                        model = request,
+                        imageLoader = LocalAppImageLoader.current,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
-                    ) {
-                        when (painter.state) {
-                            is AsyncImagePainter.State.Success -> SubcomposeAsyncImageContent()
-                            else -> Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Rounded.VideoLibrary,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                    modifier = Modifier.size(24.dp),
-                                )
-                            }
-                        }
-                    }
+                        onState = { state ->
+                            loaded = state is AsyncImagePainter.State.Success
+                        },
+                    )
                 }
                 Surface(
                     color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f),

@@ -30,6 +30,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,8 +46,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImagePainter
-import coil3.compose.SubcomposeAsyncImage
-import coil3.compose.SubcomposeAsyncImageContent
+import coil3.request.ImageRequest
+import io.github.satoru2727.miteru.ui.LocalAppImageLoader
+import coil3.compose.AsyncImage
 import io.github.satoru2727.miteru.R
 import io.github.satoru2727.miteru.core.net.ApiException
 import java.net.SocketTimeoutException
@@ -192,23 +196,30 @@ fun ChannelLogo(
                 )
             }
         } else {
-            SubcomposeAsyncImage(
-                model = url,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.fillMaxSize().padding(size * 0.14f),
-            ) {
-                when (painter.state) {
-                    is AsyncImagePainter.State.Success -> SubcomposeAsyncImageContent()
-                    else -> Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Rounded.LiveTv,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.size(size * 0.45f),
-                        )
-                    }
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val request = remember(url, context) {
+                ImageRequest.Builder(context.applicationContext).data(url).build()
+            }
+            var loaded by remember(url) { mutableStateOf(false) }
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                if (!loaded) {
+                    Icon(
+                        Icons.Rounded.LiveTv,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(size * 0.45f),
+                    )
                 }
+                AsyncImage(
+                    model = request,
+                    imageLoader = LocalAppImageLoader.current,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(size * 0.14f),
+                    onState = { state ->
+                        loaded = state is AsyncImagePainter.State.Success
+                    },
+                )
             }
         }
     }

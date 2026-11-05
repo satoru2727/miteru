@@ -119,7 +119,7 @@
     <string name="settings_fdroid_value">掲載準備中</string>
     <string name="settings_clear_cache">キャッシュを削除</string>
     <string name="settings_clear_cache_desc">チャンネルと番組表の一時データを削除します</string>
-    <string name="settings_disconnect">サーバーを変更</string>
+    <string name="settings_disconnect">接続を解除</string>
     <string name="settings_disconnect_confirm">サーバー設定を消去してセットアップ画面に戻りますか？</string>
     <string name="settings_cancel">キャンセル</string>
     <string name="settings_ok">OK</string>

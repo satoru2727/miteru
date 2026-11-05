@@ -17,6 +17,5 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
-# Media3 / ExoPlayer uses reflection for extension renderers.
+# Media3 ships its own consumer rules; only silence optional dependencies.
 -dontwarn androidx.media3.**
--keep class androidx.media3.** { *; }

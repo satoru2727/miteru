@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -287,11 +288,18 @@ private fun GuideGrid(
     val dayWidthPx = 24f * 60f * pxPerMinute
     val dayWidth = with(density) { dayWidthPx.toDp() }
     var scrollPx by remember { mutableFloatStateOf(0f) }
+    var didInitialScroll by remember { mutableStateOf(false) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val viewportPx = with(density) { (maxWidth - ChannelColumnWidth).toPx() }.coerceAtLeast(1f)
         val maxScroll = (dayWidthPx - viewportPx).coerceAtLeast(0f)
         LaunchedEffect(maxScroll) { scrollPx = scrollPx.coerceIn(0f, maxScroll) }
+        LaunchedEffect(maxScroll, pxPerMinute, showNowLine) {
+            if (showNowLine && !didInitialScroll) {
+                scrollPx = (minutesOfDay(now) * pxPerMinute - viewportPx / 2f).coerceIn(0f, maxScroll)
+                didInitialScroll = true
+            }
+        }
         LaunchedEffect(nowJump) {
             if (nowJump > 0) {
                 scrollPx = (minutesOfDay(now) * pxPerMinute - viewportPx / 2f).coerceIn(0f, maxScroll)
@@ -333,7 +341,7 @@ private fun GuideGrid(
                         }
                     },
             ) {
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
                     items(channels, key = { it.channel.id }) { row ->
                         GuideRow(
                             row = row,

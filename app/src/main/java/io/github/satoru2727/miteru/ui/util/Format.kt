@@ -9,17 +9,17 @@ import java.util.Locale
 private val zone: ZoneId get() = ZoneId.systemDefault()
 private val isJapanese: Boolean get() = Locale.getDefault().language == "ja"
 
-private val timeFormatter = DateTimeFormatter.ofPattern("H:mm")
-private val dateTimeFormatter = DateTimeFormatter.ofPattern("M/d(E) H:mm", Locale.getDefault())
-private val dateFormatter = DateTimeFormatter.ofPattern("M/d(E)", Locale.getDefault())
+private fun timeFormatter(): DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")
+private fun dateTimeFormatter(): DateTimeFormatter = DateTimeFormatter.ofPattern("M/d(E) H:mm", Locale.getDefault())
+private fun dateFormatter(): DateTimeFormatter = DateTimeFormatter.ofPattern("M/d(E)", Locale.getDefault())
 
-fun formatTime(instant: Instant): String = timeFormatter.withZone(zone).format(instant)
+fun formatTime(instant: Instant): String = timeFormatter().withZone(zone).format(instant)
 
 fun formatTimeRange(start: Instant, end: Instant): String = "${formatTime(start)} – ${formatTime(end)}"
 
-fun formatDateTime(instant: Instant): String = dateTimeFormatter.withZone(zone).format(instant)
+fun formatDateTime(instant: Instant): String = dateTimeFormatter().withZone(zone).format(instant)
 
-fun formatDate(instant: Instant): String = dateFormatter.withZone(zone).format(instant)
+fun formatDate(instant: Instant): String = dateFormatter().withZone(zone).format(instant)
 
 fun localDateOf(instant: Instant): LocalDate = instant.atZone(zone).toLocalDate()
 

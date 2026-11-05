@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -78,25 +79,27 @@ fun AppRoot(container: AppContainer) {
         darkTheme = dark,
         dynamicColor = current?.dynamicColor ?: true,
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
-            when {
-                current == null -> Splash()
+        CompositionLocalProvider(LocalAppImageLoader provides container.imageLoader) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                when {
+                    current == null -> Splash()
 
-                !current.isConfigured || editingServer -> SetupScreen(
-                    vm = vm,
-                    initialUrl = current.serverUrl,
-                    isChangeMode = editingServer && current.isConfigured,
-                    onCancel = { editingServer = false },
-                    onDone = { editingServer = false },
-                )
+                    !current.isConfigured || editingServer -> SetupScreen(
+                        vm = vm,
+                        initialUrl = current.serverUrl,
+                        isChangeMode = editingServer && current.isConfigured,
+                        onCancel = { editingServer = false },
+                        onDone = { editingServer = false },
+                    )
 
-                else -> MainScreen(
-                    vm = vm,
-                    onChangeServer = { editingServer = true },
-                )
+                    else -> MainScreen(
+                        vm = vm,
+                        onChangeServer = { editingServer = true },
+                    )
+                }
             }
         }
     }
