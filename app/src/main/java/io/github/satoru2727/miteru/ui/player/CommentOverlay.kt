@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -106,7 +107,7 @@ private fun DanmakuText(
     travelMillis: Int,
 ) {
     val density = LocalDensity.current
-    var textWidth by remember { mutableIntStateOf(0) }
+    var textWidth by remember { mutableIntStateOf(200) } // 初期値: 200px
     val progress = remember { Animatable(1f) }
     val comment = item.comment
 
@@ -160,9 +161,11 @@ private fun DanmakuText(
                 blurRadius = 4f,
             ),
         ),
+        onTextLayout = { result: TextLayoutResult ->
+            textWidth = result.size.width
+        },
         modifier = Modifier
-            .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
-            .onGloballyPositioned { coordinates -> textWidth = coordinates.size.width },
+            .offset { IntOffset(x.roundToInt(), y.roundToInt()) },
     )
 }
 
