@@ -10,11 +10,13 @@ import io.github.satoru2727.miteru.core.model.Channel
 import io.github.satoru2727.miteru.core.model.JikkyoComment
 import io.github.satoru2727.miteru.core.model.Program
 import io.github.satoru2727.miteru.core.model.Quality
+import io.github.satoru2727.miteru.core.model.RecordPreset
 import io.github.satoru2727.miteru.core.model.Recording
 import io.github.satoru2727.miteru.core.model.ReservationItem
 import io.github.satoru2727.miteru.core.model.ServerInfo
 import io.github.satoru2727.miteru.core.model.Timetable
 import io.github.satoru2727.miteru.core.net.KonomiApi
+import io.github.satoru2727.miteru.core.net.RecordSettingsDto
 import io.github.satoru2727.miteru.core.settings.Settings
 import io.github.satoru2727.miteru.core.settings.ThemeMode
 import io.github.satoru2727.miteru.core.util.isMeteredNetwork
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
@@ -97,6 +100,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     // 録画予約
     var reservationsState by mutableStateOf<LoadState<List<ReservationItem>>>(LoadState.Idle)
         private set
+    var recordPresets by mutableStateOf<List<RecordPreset>>(emptyList())
+        private set
+
+    // 番組検索（EDCB バックエンドのみ）
+    var searchState by mutableStateOf<LoadState<List<Program>>>(LoadState.Idle)
+        private set
+    var searchQuery by mutableStateOf("")
+        private set
 
     // 録画
     var recordingsState by mutableStateOf<LoadState<List<Recording>>>(LoadState.Idle)
@@ -139,6 +150,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun refreshAll() {
         viewModelScope.launch { repository.refreshServerInfo() }
+        loadRecordPresets()
         loadChannels()
         loadRecordings(refresh = true)
         viewModelScope.launch { resumePositions = settingsStore.positions() }
@@ -147,7 +159,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun selectTab(next: Tab) {
         tab = next
         when (next) {
-            Tab.GUIDE -> if (guideState is LoadState.Idle) loadGuide()
+            Tab.GUIDE -> {
+                if (guideState is LoadState.Idle) loadGuide()
+                loadRecordPresets()
+            }
             Tab.RESERVATIONS -> if (reservationsState is LoadState.Idle) loadReservations()
             Tab.RECORDINGS -> {
                 if (recordingsState is LoadState.Idle) loadRecordings()
@@ -239,12 +254,44 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun loadRecordPresets() {
+        if (recordPresets.isNotEmpty()) return
+        viewModelScope.launch {
+            repository.loadRecordPresets().onSuccess { recordPresets = it }
+        }
+    }
+
     /** 番組表の番組を録画予約する。EDCB バックエンドでのみ成功する。 */
-    suspend fun reserve(program: Program): Result<Unit> =
-        repository.addReservation(program.id).onSuccess {
+    suspend fun reserve(
+        program: Program,
+        settings: RecordSettingsDto = RecordSettingsDto(),
+    ): Result<Unit> =
+        repository.addReservation(program.id, settings).onSuccess {
             loadReservations(force = true)
             loadGuide(force = true)
         }
+
+    // ---- 番組検索 ----
+
+    fun onSearchQueryChange(value: String) {
+        searchQuery = value
+    }
+
+    fun runSearch() {
+        val keyword = searchQuery.trim()
+        if (keyword.isEmpty()) return
+        viewModelScope.launch {
+            searchState = LoadState.Loading
+            repository.searchPrograms(keyword)
+                .onSuccess { searchState = LoadState.Success(it) }
+                .onFailure { searchState = LoadState.Failure(it) }
+        }
+    }
+
+    fun clearSearch() {
+        searchQuery = ""
+        searchState = LoadState.Idle
+    }
 
     suspend fun cancelReservation(id: Int): Result<Unit> =
         repository.deleteReservation(id).onSuccess {
@@ -348,7 +395,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             if (playback.playLive(channel, currentSettings.defaultQuality)) {
                 commentFlow = if (currentSettings.showComments) {
-                    container.jikkyo.live(channel.id)
+                    mutedFlow(container.jikkyo.live(channel.id))
                 } else {
                     null
                 }
@@ -391,7 +438,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             if (playback.playRecording(recording, currentSettings.defaultQuality, positionMs)) {
                 commentFlow = if (currentSettings.showComments) {
-                    recordedComments(recording.id)
+                    mutedFlow(recordedComments(recording.id))
                 } else {
                     null
                 }
@@ -479,6 +526,36 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { settingsStore.setResumePlayback(enabled) }
     }
 
+    fun setCommentScale(scale: Float) {
+        viewModelScope.launch { settingsStore.setCommentScale(scale) }
+    }
+
+    fun setCommentAlpha(alpha: Float) {
+        viewModelScope.launch { settingsStore.setCommentAlpha(alpha) }
+    }
+
+    fun setCommentSpeed(speed: String) {
+        viewModelScope.launch { settingsStore.setCommentSpeed(speed) }
+    }
+
+    fun setCommentNgWords(words: String) {
+        viewModelScope.launch { settingsStore.setCommentNgWords(words) }
+    }
+
+    /** NG ワードに一致するコメントを落とす。 */
+    private fun muted(text: String): Boolean {
+        val words = settings.value?.commentNgWords.orEmpty()
+            .split(',', ' ', '　')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        if (words.isEmpty()) return false
+        val lower = text.lowercase()
+        return words.any { lower.contains(it.lowercase()) }
+    }
+
+    private fun mutedFlow(source: Flow<JikkyoComment>): Flow<JikkyoComment> =
+        source.filter { !muted(it.text) }
+
     fun setShowComments(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setShowComments(enabled) }
         if (!enabled) {
@@ -489,9 +566,9 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
                 now.isLive && now.channelId != null -> {
                     val channel = (channelsState as? LoadState.Success)?.value
                         ?.firstOrNull { it.displayId == now.channelId }
-                    channel?.let { container.jikkyo.live(it.id) }
+                    channel?.let { mutedFlow(container.jikkyo.live(it.id)) }
                 }
-                now.videoId != null -> recordedComments(now.videoId)
+                now.videoId != null -> mutedFlow(recordedComments(now.videoId))
                 else -> null
             }
         }

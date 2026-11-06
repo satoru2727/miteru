@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +31,8 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -65,12 +70,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.satoru2727.miteru.R
 import io.github.satoru2727.miteru.core.model.Channel
 import io.github.satoru2727.miteru.core.model.ChannelType
 import io.github.satoru2727.miteru.core.model.Program
+import io.github.satoru2727.miteru.core.model.RecordPreset
+import io.github.satoru2727.miteru.core.net.RecordSettingsDto
 import io.github.satoru2727.miteru.core.model.TimetableChannel
 import io.github.satoru2727.miteru.ui.AppViewModel
 import io.github.satoru2727.miteru.ui.GuideFilter
@@ -110,6 +118,7 @@ fun GuideScreen(vm: AppViewModel) {
     }
 
     var selected by remember { mutableStateOf<Pair<TimetableChannel, Program>?>(null) }
+    var showSearch by remember { mutableStateOf(false) }
     var hourWidth by remember { mutableStateOf(220.dp) }
     var nowJump by remember { mutableStateOf(0) }
 
@@ -142,6 +151,9 @@ fun GuideScreen(vm: AppViewModel) {
                 style = MaterialTheme.typography.headlineLarge,
                 modifier = Modifier.weight(1f),
             )
+            IconButton(onClick = { showSearch = true }) {
+                Icon(Icons.Rounded.Search, contentDescription = stringResource(R.string.guide_search))
+            }
             TextButton(onClick = { nowJump += 1 }) {
                 Text(stringResource(R.string.guide_now))
             }
@@ -230,6 +242,14 @@ fun GuideScreen(vm: AppViewModel) {
         }
     }
 
+    if (showSearch) {
+        ProgramSearchSheet(
+            vm = vm,
+            isEdcb = serverInfo?.isEdcb == true,
+            onDismiss = { showSearch = false },
+        )
+    }
+
     selected?.let { (row, program) ->
         ProgramSheet(
             channel = row.channel,
@@ -242,7 +262,8 @@ fun GuideScreen(vm: AppViewModel) {
                 selected = null
                 vm.requestPlayChannel(row.channel)
             },
-            onReserve = { vm.reserve(program) },
+            onReserve = { settings -> vm.reserve(program, settings) },
+            presets = vm.recordPresets,
             onCancelReservation = { id -> vm.cancelReservation(id) },
         )
     }
@@ -522,13 +543,15 @@ private fun ProgramSheet(
     isPlaying: Boolean,
     onDismiss: () -> Unit,
     onWatch: () -> Unit,
-    onReserve: suspend () -> Result<Unit>,
+    onReserve: suspend (RecordSettingsDto) -> Result<Unit>,
     onCancelReservation: suspend (Int) -> Result<Unit>,
+    presets: List<RecordPreset>,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var working by remember { mutableStateOf(false) }
     var reserveError by remember { mutableStateOf<String?>(null) }
+    var showReserveDialog by remember { mutableStateOf(false) }
     val failedMessage = stringResource(R.string.guide_reserve_failed)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -664,18 +687,7 @@ private fun ProgramSheet(
                     }
                 } else if (!program.end.isBefore(java.time.Instant.now())) {
                     Button(
-                        onClick = {
-                            if (working) return@Button
-                            scope.launch {
-                                working = true
-                                reserveError = null
-                                val result = onReserve()
-                                working = false
-                                if (result.isSuccess) onDismiss() else {
-                                    reserveError = result.exceptionOrNull()?.message ?: failedMessage
-                                }
-                            }
-                        },
+                        onClick = { if (!working) showReserveDialog = true },
                         enabled = !working,
                         modifier = Modifier.fillMaxWidth().height(50.dp),
                         shape = RoundedCornerShape(14.dp),
@@ -701,6 +713,99 @@ private fun ProgramSheet(
             }
         }
     }
+
+    if (showReserveDialog) {
+        ReserveDialog(
+            presets = presets,
+            onDismiss = { showReserveDialog = false },
+            onConfirm = { settings ->
+                showReserveDialog = false
+                scope.launch {
+                    working = true
+                    reserveError = null
+                    val result = onReserve(settings)
+                    working = false
+                    if (result.isSuccess) onDismiss() else {
+                        reserveError = result.exceptionOrNull()?.message ?: failedMessage
+                    }
+                }
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReserveDialog(
+    presets: List<RecordPreset>,
+    onDismiss: () -> Unit,
+    onConfirm: (RecordSettingsDto) -> Unit,
+) {
+    var selectedPreset by remember { mutableStateOf(presets.firstOrNull()) }
+    var priority by remember { mutableStateOf(selectedPreset?.settings?.priority ?: 3) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.reserve_dialog_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.reserve_preset),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    FilterChip(
+                        selected = selectedPreset == null,
+                        onClick = {
+                            selectedPreset = null
+                            priority = 3
+                        },
+                        label = { Text(stringResource(R.string.reserve_default_preset)) },
+                    )
+                    presets.filter { it.id != 0 }.forEach { preset ->
+                        FilterChip(
+                            selected = selectedPreset?.id == preset.id,
+                            onClick = {
+                                selectedPreset = preset
+                                priority = preset.settings.priority
+                            },
+                            label = { Text(preset.name) },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = stringResource(R.string.reserve_priority, priority),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = priority.toFloat(),
+                    onValueChange = { priority = it.roundToInt().coerceIn(1, 5) },
+                    valueRange = 1f..5f,
+                    steps = 3,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val base = selectedPreset?.settings ?: RecordSettingsDto()
+                onConfirm(base.copy(priority = priority))
+            }) {
+                Text(stringResource(R.string.reserve_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        },
+    )
 }
 
 

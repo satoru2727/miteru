@@ -1,6 +1,8 @@
 package io.github.satoru2727.miteru
 
 import io.github.satoru2727.miteru.core.net.JikkyoCommentsDto
+import io.github.satoru2727.miteru.core.net.ProgramsDto
+import io.github.satoru2727.miteru.core.net.RecordSettingsPresetsDto
 import io.github.satoru2727.miteru.core.net.ReservationsDto
 import io.github.satoru2727.miteru.core.net.toDomain
 import kotlinx.serialization.json.Json
@@ -60,6 +62,30 @@ class ReservationMappingTest {
         assertFalse(item.isEnabled)
         assertEquals(4, item.priority)
         assertTrue(item.isPartial)
+    }
+
+    @Test
+    fun `search results decode as programs`() {
+        val payload = """
+            {"total": 1, "programs": [$programJson]}
+        """.trimIndent()
+        val result = json.decodeFromString(ProgramsDto.serializer(), payload)
+        assertEquals(1, result.total)
+        assertEquals("ニュース7", result.programs.first().toDomain().title)
+    }
+
+    @Test
+    fun `recording presets decode settings`() {
+        val payload = """
+            {"presets": [
+              {"id": 0, "name": "デフォルト", "record_settings": {"priority": 3}},
+              {"id": 1, "name": "優先度高", "record_settings": {"priority": 5, "is_enabled": true}}
+            ]}
+        """.trimIndent()
+        val presets = json.decodeFromString(RecordSettingsPresetsDto.serializer(), payload)
+        assertEquals(2, presets.presets.size)
+        assertEquals(5, presets.presets[1].record_settings.priority)
+        assertEquals("優先度高", presets.presets[1].name)
     }
 
     @Test

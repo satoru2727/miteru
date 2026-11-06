@@ -2,12 +2,15 @@ package io.github.satoru2727.miteru.data
 
 import io.github.satoru2727.miteru.core.model.Channel
 import io.github.satoru2727.miteru.core.model.Fetched
+import io.github.satoru2727.miteru.core.model.Program
 import io.github.satoru2727.miteru.core.model.Recording
+import io.github.satoru2727.miteru.core.model.RecordPreset
 import io.github.satoru2727.miteru.core.model.RecordingsPage
 import io.github.satoru2727.miteru.core.model.ReservationsPage
 import io.github.satoru2727.miteru.core.model.ServerInfo
 import io.github.satoru2727.miteru.core.model.Timetable
 import io.github.satoru2727.miteru.core.net.KonomiApi
+import io.github.satoru2727.miteru.core.net.RecordSettingsDto
 import io.github.satoru2727.miteru.core.net.LiveChannelsDto
 import io.github.satoru2727.miteru.core.net.toDomain
 import io.github.satoru2727.miteru.core.settings.SettingsStore
@@ -128,9 +131,22 @@ class KonomiRepository(
         return runCatching { api.reservations() }
     }
 
-    suspend fun addReservation(programId: String): Result<Unit> {
+    suspend fun addReservation(
+        programId: String,
+        settings: RecordSettingsDto = RecordSettingsDto(),
+    ): Result<Unit> {
         val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
-        return runCatching { api.addReservation(programId) }
+        return runCatching { api.addReservation(programId, settings) }
+    }
+
+    suspend fun searchPrograms(keyword: String): Result<List<Program>> {
+        val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
+        return runCatching { api.searchPrograms(keyword) }
+    }
+
+    suspend fun loadRecordPresets(): Result<List<RecordPreset>> {
+        val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
+        return runCatching { api.recordingPresets() }
     }
 
     suspend fun deleteReservation(id: Int): Result<Unit> {

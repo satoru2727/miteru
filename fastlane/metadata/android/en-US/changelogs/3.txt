@@ -1,0 +1,4 @@
+- Program search (EDCB backend only)
+- Pick a recording preset and priority when reserving
+- Comment text size, speed and NG word settings
+- Explain that reservations/search are EDCB-only on Mirakurun backends

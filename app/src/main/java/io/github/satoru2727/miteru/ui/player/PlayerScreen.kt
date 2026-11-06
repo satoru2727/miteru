@@ -92,6 +92,7 @@ fun PlayerScreen(vm: AppViewModel) {
     val item by vm.nowPlaying.collectAsStateWithLifecycle()
     val playerState by vm.playerState.collectAsStateWithLifecycle()
     val controller by vm.controller.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
     val nowPlaying = item ?: return
 
     val context = LocalContext.current
@@ -175,7 +176,13 @@ fun PlayerScreen(vm: AppViewModel) {
         }
 
         commentFlow?.let { flow ->
-            CommentOverlay(comments = flow, modifier = Modifier.fillMaxSize())
+            CommentOverlay(
+                comments = flow,
+                scale = settings?.commentScale ?: 1f,
+                alpha = settings?.commentAlpha ?: 1f,
+                speed = settings?.commentSpeed ?: "normal",
+                modifier = Modifier.fillMaxSize(),
+            )
         }
 
         BoxWithConstraints(Modifier.fillMaxSize()) {

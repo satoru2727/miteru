@@ -1,15 +1,19 @@
 package io.github.satoru2727.miteru.core.net
 
 import io.github.satoru2727.miteru.core.model.Channel
+import io.github.satoru2727.miteru.core.model.Program
 import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.core.model.Recording
 import io.github.satoru2727.miteru.core.model.JikkyoComment
+import io.github.satoru2727.miteru.core.model.RecordPreset
 import io.github.satoru2727.miteru.core.model.RecordingsPage
 import io.github.satoru2727.miteru.core.model.ReservationsPage
 import io.github.satoru2727.miteru.core.model.ServerInfo
 import io.github.satoru2727.miteru.core.model.Timetable
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl
@@ -98,10 +102,23 @@ class KonomiApi(
             execute(get("api/recording/reservations")),
         ).toDomain()
 
-    suspend fun addReservation(programId: String) {
+    suspend fun searchPrograms(keyword: String): List<Program> {
+        val body = buildJsonObject { put("keyword", keyword) }.toString()
+        return json.decodeFromString<ProgramsDto>(
+            execute(jsonRequest("api/programs/search", "POST", body)),
+        ).programs.map { it.toDomain() }
+    }
+
+    /** 録画設定プリセット一覧（EDCB バックエンドのみ）。 */
+    suspend fun recordingPresets(): List<RecordPreset> =
+        json.decodeFromString<RecordSettingsPresetsDto>(
+            execute(get("api/recording/presets")),
+        ).presets.map { RecordPreset(id = it.id, name = it.name, settings = it.record_settings) }
+
+    suspend fun addReservation(programId: String, recordSettings: RecordSettingsDto = RecordSettingsDto()) {
         val payload = ReservationAddRequestDto(
             program_id = programId,
-            record_settings = RecordSettingsDto(),
+            record_settings = recordSettings,
         )
         execute(
             jsonRequest(

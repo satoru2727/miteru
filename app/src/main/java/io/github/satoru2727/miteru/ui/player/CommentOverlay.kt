@@ -51,8 +51,16 @@ private data class Danmaku(
 @Composable
 fun CommentOverlay(
     comments: Flow<JikkyoComment>,
+    scale: Float = 1f,
+    alpha: Float = 1f,
+    speed: String = "normal",
     modifier: Modifier = Modifier,
 ) {
+    val travelMillis = when (speed) {
+        "fast" -> 5000
+        "slow" -> 10000
+        else -> TravelMillis
+    }
     val active = remember { mutableStateListOf<Danmaku>() }
     var nextId by remember { mutableLongStateOf(0L) }
     var nextLane by remember { mutableIntStateOf(0) }
@@ -79,6 +87,9 @@ fun CommentOverlay(
                     item = item,
                     widthPx = widthPx,
                     heightPx = heightPx,
+                    scale = scale,
+                    alpha = alpha,
+                    travelMillis = travelMillis,
                 )
             }
         }
@@ -90,6 +101,9 @@ private fun DanmakuText(
     item: Danmaku,
     widthPx: Float,
     heightPx: Float,
+    scale: Float,
+    alpha: Float,
+    travelMillis: Int,
 ) {
     val density = LocalDensity.current
     var textWidth by remember { mutableIntStateOf(0) }
@@ -99,14 +113,14 @@ private fun DanmakuText(
     LaunchedEffect(item.id) {
         progress.animateTo(
             targetValue = 0f,
-            animationSpec = tween(durationMillis = TravelMillis, easing = LinearEasing),
+            animationSpec = tween(durationMillis = travelMillis, easing = LinearEasing),
         )
     }
 
     val fontSize = when (comment.size) {
-        "big" -> 28.sp
-        "small" -> 16.sp
-        else -> 22.sp
+        "big" -> 28.sp * scale
+        "small" -> 16.sp * scale
+        else -> 22.sp * scale
     }
     val laneHeightPx = with(density) { 34.dp.toPx() }
     val topPx = with(density) { 14.dp.toPx() }
@@ -133,7 +147,7 @@ private fun DanmakuText(
 
     Text(
         text = comment.text,
-        color = parseCommentColor(comment.color),
+        color = parseCommentColor(comment.color).copy(alpha = alpha),
         fontSize = fontSize,
         fontWeight = FontWeight.SemiBold,
         maxLines = 1,

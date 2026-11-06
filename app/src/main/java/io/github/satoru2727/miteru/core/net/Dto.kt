@@ -70,6 +70,24 @@ data class ReservationItemDto(
 )
 
 @Serializable
+data class ProgramsDto(
+    val total: Int = 0,
+    val programs: List<ProgramDto> = emptyList(),
+)
+
+@Serializable
+data class RecordSettingsPresetDto(
+    val id: Int = 0,
+    val name: String = "",
+    val record_settings: RecordSettingsDto = RecordSettingsDto(),
+)
+
+@Serializable
+data class RecordSettingsPresetsDto(
+    val presets: List<RecordSettingsPresetDto> = emptyList(),
+)
+
+@Serializable
 data class JikkyoInfoDto(
     val watch_session_url: String? = null,
     val nicolive_watch_session_url: String? = null,

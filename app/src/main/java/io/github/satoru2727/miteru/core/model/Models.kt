@@ -1,5 +1,6 @@
 package io.github.satoru2727.miteru.core.model
 
+import io.github.satoru2727.miteru.core.net.RecordSettingsDto
 import java.time.Instant
 
 /** チャンネル種別。KonomiTV の type フィールドに対応する。 */
@@ -141,6 +142,13 @@ data class ReservationItem(
     val isPartial: Boolean get() = availability == "Partial"
     val isUnavailable: Boolean get() = availability == "Unavailable"
 }
+
+/** 録画設定プリセット。設定本体は EDCB の値をそのまま保持する。 */
+data class RecordPreset(
+    val id: Int,
+    val name: String,
+    val settings: RecordSettingsDto,
+)
 
 data class JikkyoComment(
     val text: String,

@@ -3,6 +3,7 @@ package io.github.satoru2727.miteru.core.settings
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -25,6 +26,10 @@ data class Settings(
     val warnOnMobileData: Boolean = true,
     val resumePlayback: Boolean = true,
     val showComments: Boolean = true,
+    val commentScale: Float = 1f,
+    val commentAlpha: Float = 1f,
+    val commentSpeed: String = "normal",
+    val commentNgWords: String = "",
     val cachedChannelsAt: Long = 0L,
     val playbackActive: Boolean = false,
 ) {
@@ -48,6 +53,10 @@ class SettingsStore(private val context: Context) {
         val WARN_MOBILE = booleanPreferencesKey("warn_mobile")
         val RESUME = booleanPreferencesKey("resume_playback")
         val SHOW_COMMENTS = booleanPreferencesKey("show_comments")
+        val COMMENT_SCALE = floatPreferencesKey("comment_scale")
+        val COMMENT_ALPHA = floatPreferencesKey("comment_alpha")
+        val COMMENT_SPEED = stringPreferencesKey("comment_speed")
+        val COMMENT_NG = stringPreferencesKey("comment_ng_words")
         val CHANNELS_JSON = stringPreferencesKey("channels_cache_json")
         val CHANNELS_AT = longPreferencesKey("channels_cache_at")
         val POSITIONS = stringPreferencesKey("resume_positions")
@@ -65,6 +74,10 @@ class SettingsStore(private val context: Context) {
             warnOnMobileData = prefs[Keys.WARN_MOBILE] ?: true,
             resumePlayback = prefs[Keys.RESUME] ?: true,
             showComments = prefs[Keys.SHOW_COMMENTS] ?: true,
+            commentScale = prefs[Keys.COMMENT_SCALE] ?: 1f,
+            commentAlpha = prefs[Keys.COMMENT_ALPHA] ?: 1f,
+            commentSpeed = prefs[Keys.COMMENT_SPEED] ?: "normal",
+            commentNgWords = prefs[Keys.COMMENT_NG] ?: "",
             cachedChannelsAt = prefs[Keys.CHANNELS_AT] ?: 0L,
             playbackActive = prefs[Keys.PLAYBACK_ACTIVE] ?: false,
         )
@@ -100,6 +113,22 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setShowComments(enabled: Boolean) {
         context.miteruDataStore.edit { it[Keys.SHOW_COMMENTS] = enabled }
+    }
+
+    suspend fun setCommentScale(scale: Float) {
+        context.miteruDataStore.edit { it[Keys.COMMENT_SCALE] = scale }
+    }
+
+    suspend fun setCommentAlpha(alpha: Float) {
+        context.miteruDataStore.edit { it[Keys.COMMENT_ALPHA] = alpha }
+    }
+
+    suspend fun setCommentSpeed(speed: String) {
+        context.miteruDataStore.edit { it[Keys.COMMENT_SPEED] = speed }
+    }
+
+    suspend fun setCommentNgWords(words: String) {
+        context.miteruDataStore.edit { it[Keys.COMMENT_NG] = words }
     }
 
     suspend fun cacheChannels(json: String, cachedAt: Long) {

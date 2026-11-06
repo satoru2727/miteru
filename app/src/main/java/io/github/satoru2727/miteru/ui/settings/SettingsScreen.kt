@@ -25,6 +25,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -66,6 +67,8 @@ fun SettingsScreen(
     var qualitySheet by remember { mutableStateOf(false) }
     var confirmClearServer by remember { mutableStateOf(false) }
     var confirmClearCache by remember { mutableStateOf(false) }
+    var ngDialog by remember { mutableStateOf(false) }
+    var ngText by remember { mutableStateOf(current.commentNgWords) }
     val uriHandler = LocalUriHandler.current
 
     Column(
@@ -158,6 +161,70 @@ fun SettingsScreen(
                             checked = current.showComments,
                             onCheckedChange = vm::setShowComments,
                         )
+                    },
+                )
+            }
+        }
+
+        SectionHeader(
+            title = stringResource(R.string.settings_comments_section),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+        )
+        SettingsCard {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(R.string.settings_comment_size),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    val sizes = listOf(
+                        0.8f to stringResource(R.string.settings_comment_size_small),
+                        1f to stringResource(R.string.settings_comment_size_normal),
+                        1.3f to stringResource(R.string.settings_comment_size_large),
+                    )
+                    sizes.forEachIndexed { index, (value, label) ->
+                        SegmentedButton(
+                            selected = current.commentScale == value,
+                            onClick = { vm.setCommentScale(value) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = sizes.size),
+                        ) {
+                            Text(label, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = stringResource(R.string.settings_comment_speed),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    val speeds = listOf(
+                        "fast" to stringResource(R.string.settings_comment_speed_fast),
+                        "normal" to stringResource(R.string.settings_comment_speed_normal),
+                        "slow" to stringResource(R.string.settings_comment_speed_slow),
+                    )
+                    speeds.forEachIndexed { index, (value, label) ->
+                        SegmentedButton(
+                            selected = current.commentSpeed == value,
+                            onClick = { vm.setCommentSpeed(value) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = speeds.size),
+                        ) {
+                            Text(label, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                SettingRow(
+                    title = stringResource(R.string.settings_comment_ng),
+                    subtitle = current.commentNgWords.ifBlank { stringResource(R.string.settings_comment_ng_empty) },
+                    onClick = {
+                        ngText = current.commentNgWords
+                        ngDialog = true
+                    },
+                    trailing = {
+                        Icon(Icons.Rounded.ChevronRight, contentDescription = null)
                     },
                 )
             }
@@ -298,6 +365,43 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    if (ngDialog) {
+        AlertDialog(
+            onDismissRequest = { ngDialog = false },
+            title = { Text(stringResource(R.string.settings_comment_ng)) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = ngText,
+                        onValueChange = { ngText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text(stringResource(R.string.settings_comment_ng_hint)) },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.settings_comment_ng_desc),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.setCommentNgWords(ngText)
+                    ngDialog = false
+                }) {
+                    Text(stringResource(R.string.settings_comment_ng_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { ngDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 
     if (confirmClearServer) {
