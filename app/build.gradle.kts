@@ -22,8 +22,8 @@ android {
         applicationId = "io.github.satoru2727.miteru"
         minSdk = 29
         targetSdk = 36
-        versionCode = providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(4)
-        versionName = providers.gradleProperty("versionName").getOrElse("1.3.0")
+        versionCode = providers.gradleProperty("versionCode").map { it.toInt() }.getOrElse(5)
+        versionName = providers.gradleProperty("versionName").getOrElse("1.3.1")
         resourceConfigurations += listOf("en", "ja")
     }
 

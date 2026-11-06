@@ -1,0 +1,2 @@
+- Fix recording playback (type=primary-audio, recording status check, Japanese error messages)
+- Fix comment overlay flickering
