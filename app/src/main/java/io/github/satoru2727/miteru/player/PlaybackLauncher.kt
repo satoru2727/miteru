@@ -108,8 +108,15 @@ class PlaybackLauncher(
                 "onPlayerError ${error.errorCodeName}(${error.errorCode}) media=${mediaUrl?.let { MiteruLog.mask(it) }} message=${error.message}",
                 error.cause ?: error,
             )
+            val userMessage = when (error.errorCode) {
+                androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED -> "ネットワーク接続に失敗しました"
+                androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "サーバーからエラーが返されました"
+                androidx.media3.common.PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED -> "動画形式がサポートされていません"
+                androidx.media3.common.PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED -> "動画をデコードできません"
+                else -> error.message ?: error.errorCodeName
+            }
             _playerState.value = _playerState.value.copy(
-                error = error.message ?: error.errorCodeName,
+                error = userMessage,
                 isBuffering = false,
             )
         }
@@ -190,6 +197,12 @@ class PlaybackLauncher(
 
     suspend fun playRecording(recording: Recording, quality: Quality, startPositionMs: Long = 0L): Boolean {
         MiteruLog.d("Player", "playRecording id=${recording.id} quality=$quality")
+        // 録画が再生可能かをチェック（Missing/Recording 状態は再生できない）
+        if (recording.video.isMissing || recording.video.isRecording) {
+            MiteruLog.w("Player", "recording not playable: status=${recording.video.status}")
+            _playerState.value = _playerState.value.copy(error = "録画がまだ準備中です")
+            return false
+        }
         val api = repository.api() ?: return false
         val mediaController = awaitController() ?: return false
         stopSessionJobs()
