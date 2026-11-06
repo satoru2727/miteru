@@ -101,8 +101,8 @@ export JAVA_HOME="$HOME/.local/share/mise/installs/java/temurin-21.0.13+9.0.LTS"
 
 - `fastlane/metadata/android/{en-US,ja-JP}/` にストア用メタデータ（説明・アイコン・スクリーンショット）を同梱
 - F-Droid は `key.properties` のない状態でビルドし、F-Droid の鍵で署名します
-- `versionCode` / `versionName` は `app/build.gradle.kts`（CI からは Gradle プロパティで上書き）
-- 提出状況: **fdroiddata に MR 提出済み**（レビュー待ち）— <https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55873>
+- `versionCode` / `versionName` は `app/build.gradle.kts`（CI からは Gradle プロパティで上書き。**F-Droid は素のビルドなので既定値が使われる = リリースごとに既定値を上げること**）
+- 提出状況: 前回の MR はクローズ済み（テンプレート未準拠 + 3 ヶ月ルール）→ **2027-02 に再提出予定** — <https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55873>
 
 ## プライバシー
 

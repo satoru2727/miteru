@@ -1,0 +1,5 @@
+- Fixed recordings not playing (HLS streams are now labelled with the correct MIME type)
+- Fixed Niconico comments overlapping each other (collision-aware lane scheduling)
+- Comments are now drawn only over the video area
+- Comments now slide in from the right edge
+- Comments are hidden in picture-in-picture mode

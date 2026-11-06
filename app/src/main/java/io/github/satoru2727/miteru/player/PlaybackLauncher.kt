@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
@@ -67,6 +68,18 @@ class PlaybackLauncher(
     private var controller: MediaController? = null
     private var currentLiveChannel: Channel? = null
 
+    // 録画再生フォールバック用の状態
+    private data class FallbackStream(
+        val url: String,
+        val quality: Quality,
+        val sessionId: String,
+        val mimeType: String,
+    )
+    private var fallbackStreams: List<FallbackStream> = emptyList()
+    private var fallbackIndex: Int = 0
+    private var fallbackRecording: Recording? = null
+    private var fallbackStartMs: Long = 0
+
     /** プレイヤー画面が前面に出ているか（ホーム遷移時の自動 PiP 判定に使う）。 */
     @Volatile
     var playerVisible: Boolean = false
@@ -110,6 +123,19 @@ class PlaybackLauncher(
                 "onPlayerError ${error.errorCodeName}(${error.errorCode}) media=${mediaUrl?.let { MiteruLog.mask(it) }} message=${error.message}",
                 error.cause ?: error,
             )
+
+            // 録画再生中のフォールバック: 次の候補（低い品質）を試す
+            if (fallbackStreams.isNotEmpty() && fallbackIndex < fallbackStreams.size - 1) {
+                fallbackIndex++
+                val next = fallbackStreams[fallbackIndex]
+                MiteruLog.d("Player", "fallback: trying next stream (q=${next.quality.apiName})")
+                scope.launch {
+                    val recording = fallbackRecording ?: return@launch
+                    tryPlayUrl(next, recording)
+                }
+                return
+            }
+
             val userMessage = when (error.errorCode) {
                 androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED -> "ネットワーク接続に失敗しました"
                 androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> "サーバーからエラーが返されました"
@@ -157,6 +183,10 @@ class PlaybackLauncher(
 
     suspend fun playLive(channel: Channel, quality: Quality): Boolean {
         MiteruLog.d("Player", "playLive channel=${channel.id} quality=$quality")
+        // 録画のフォールバック状態をクリア
+        fallbackStreams = emptyList()
+        fallbackIndex = 0
+        fallbackRecording = null
         val api = repository.api() ?: return false
         val mediaController = awaitController() ?: return false
         stopSessionJobs()
@@ -190,9 +220,12 @@ class PlaybackLauncher(
             quality = quality,
         )
         _playerState.value = PlayerUiState()
-        mediaController.setMediaItem(item)
-        mediaController.prepare()
-        mediaController.play()
+        mediaController.clearMediaItems()
+        mediaController.stop()
+        mediaController.release()
+        fallbackStreams = emptyList()
+        fallbackIndex = 0
+        fallbackRecording = null
         settings.setPlaybackActive(true)
         return true
     }
@@ -203,21 +236,42 @@ class PlaybackLauncher(
         Quality.Q480P, Quality.Q360P, Quality.Q240P,
     )
 
-    /** 録画のストリーム URL を生成（HLS と MPEG-TS の両方を試す） */
-    private fun recordingStreamUrls(api: KonomiApi, videoId: Int, quality: Quality, sessionId: String): List<String> {
-        return listOf(
-            api.videoStreamUrl(videoId, quality, sessionId), // HLS
-            api.videoMpegTsStreamUrl(videoId, quality, sessionId),   // MPEG-TS
-        )
+    suspend fun playRecording(recording: Recording, quality: Quality, startPositionMs: Long = 0L): Boolean {
+        MiteruLog.d("Player", "playRecording id=${recording.id} quality=$quality")
+        // 録画が再生可能かをチェック（Missing/Recording 状態は再生できない）
+        if (recording.video.isMissing || recording.video.isRecording) {
+            MiteruLog.w("Player", "recording not playable: status=${recording.video.status}")
+            _playerState.value = _playerState.value.copy(error = "録画がまだ準備中です")
+            return false
+        }
+        val api = repository.api() ?: return false
+
+        // フォールバック用のストリームリスト：要求品質 → 低い品質へ（HLS のみ、MPEG-TS は録画には存在しない）
+        val qualitiesToTry = listOf(quality) + recordingQualityFallback.filter { it != quality }
+        fallbackStreams = qualitiesToTry.map { q ->
+            val sessionId = UUID.randomUUID().toString().substringBefore('-')
+            // KonomiTV: /api/streams/video/{id}/{quality}/playlist?session_id={sid}
+            // ExoPlayer は URL 末尾に .m3u8 拡張子が無いと HLS と認識できないため MIME タイプを明示
+            FallbackStream(
+                url = api.videoStreamUrl(recording.id, q, sessionId),
+                quality = q,
+                sessionId = sessionId,
+                mimeType = MimeTypes.APPLICATION_M3U8,
+            )
+        }
+        fallbackIndex = 0
+        fallbackRecording = recording
+        fallbackStartMs = startPositionMs
+
+        return tryPlayUrl(fallbackStreams[0], recording)
     }
 
-    /** 指定した URL で録画を再生する（内部用） */
-    private suspend fun tryPlayRecordingUrl(
-        url: String,
-        recording: Recording,
-        quality: Quality,
-        startPositionMs: Long,
-    ): Boolean {
+    /** 指定したストリームを再生する（内部用） */
+    private suspend fun tryPlayUrl(stream: FallbackStream, recording: Recording): Boolean {
+        MiteruLog.d(
+            "Player",
+            "tryPlayUrl q=${stream.quality.apiName} mime=${stream.mimeType} ${MiteruLog.mask(stream.url)}",
+        )
         val mediaController = awaitController() ?: return false
         stopSessionJobs()
 
@@ -226,7 +280,8 @@ class PlaybackLauncher(
             .setArtist(recording.channelName ?: recording.subtitle ?: "")
             .build()
         val item = MediaItem.Builder()
-            .setUri(url)
+            .setUri(stream.url)
+            .setMimeType(stream.mimeType)
             .setMediaId("video:${recording.id}")
             .setMediaMetadata(metadata)
             .build()
@@ -240,55 +295,22 @@ class PlaybackLauncher(
             channelId = recording.channelId,
             videoId = recording.id,
             logoUrl = null,
-            quality = quality,
+            quality = stream.quality,
         )
         _playerState.value = PlayerUiState()
 
         return try {
-            mediaController.setMediaItem(item, startPositionMs.coerceAtLeast(0L))
+            mediaController.setMediaItem(item, fallbackStartMs.coerceAtLeast(0L))
             mediaController.prepare()
             mediaController.play()
+            startKeepAlive(recording.id, stream.quality, stream.sessionId)
+            startProgressSaver(recording.id)
+            settings.setPlaybackActive(true)
             true
         } catch (e: Exception) {
-            MiteruLog.w("Player", "failed to play ${MiteruLog.mask(url)}: ${e.message}")
+            MiteruLog.w("Player", "failed to start playback: ${MiteruLog.mask(stream.url)} ${e.message}")
             false
         }
-    }
-
-    suspend fun playRecording(recording: Recording, quality: Quality, startPositionMs: Long = 0L): Boolean {
-        MiteruLog.d("Player", "playRecording id=${recording.id} quality=$quality")
-        // 録画が再生可能かをチェック（Missing/Recording 状態は再生できない）
-        if (recording.video.isMissing || recording.video.isRecording) {
-            MiteruLog.w("Player", "recording not playable: status=${recording.video.status}")
-            _playerState.value = _playerState.value.copy(error = "録画がまだ準備中です")
-            return false
-        }
-        val api = repository.api() ?: return false
-
-        // 要求された品質から始めてフォールバック
-        val qualitiesToTry = listOf(quality) + recordingQualityFallback.filter { it != quality }
-
-        for (q in qualitiesToTry) {
-            val sessionId = UUID.randomUUID().toString().substringBefore('-')
-            val urls = recordingStreamUrls(api, recording.id, q, sessionId)
-            for (url in urls) {
-                MiteruLog.d("Player", "trying recording stream: ${MiteruLog.mask(url)}")
-                if (tryPlayRecordingUrl(url, recording, q, startPositionMs)) {
-                    startKeepAlive(recording.id, q, sessionId)
-                    startProgressSaver(recording.id)
-                    settings.setPlaybackActive(true)
-                    return true
-                }
-                // 試行ごとに短い待ちを入れる
-                delay(200)
-            }
-        }
-
-        _playerState.value = _playerState.value.copy(
-            error = "再生可能なストリームが見つかりませんでした",
-            isBuffering = false,
-        )
-        return false
     }
 
     fun togglePlayPause() {

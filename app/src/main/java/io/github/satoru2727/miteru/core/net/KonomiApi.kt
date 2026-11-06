@@ -179,7 +179,7 @@ class KonomiApi(
     fun videoStreamUrl(videoId: Int, quality: Quality, sessionId: String): String =
         url(
             "api/streams/video/$videoId/${quality.apiName}/playlist",
-            listOf("session_id" to sessionId, "type" to "primary-audio"),
+            listOf("session_id" to sessionId),
         ).toString()
 
     fun videoMpegTsStreamUrl(videoId: Int, quality: Quality, sessionId: String): String =

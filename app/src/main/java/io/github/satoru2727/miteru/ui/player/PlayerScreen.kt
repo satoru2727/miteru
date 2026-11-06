@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -59,6 +60,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -68,6 +70,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -75,6 +78,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
+import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -84,6 +89,7 @@ import io.github.satoru2727.miteru.ui.AppViewModel
 import io.github.satoru2727.miteru.ui.util.findActivity
 import io.github.satoru2727.miteru.ui.util.formatClock
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -160,7 +166,28 @@ fun PlayerScreen(vm: AppViewModel) {
 
     val commentFlow = vm.commentFlow
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    // 動画の実表示サイズ（レターボックスを除いた描画矩形の計算に使う）
+    var videoSize by remember { mutableStateOf<VideoSize?>(null) }
+    DisposableEffect(controller) {
+        val c = controller
+        val listener = object : Player.Listener {
+            override fun onVideoSizeChanged(size: VideoSize) {
+                videoSize = size
+            }
+        }
+        c?.addListener(listener)
+        videoSize = c?.videoSize?.takeIf { it.width > 0 && it.height > 0 }
+        onDispose { c?.removeListener(listener) }
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+        val density = LocalDensity.current
+        val containerWidthPx = constraints.maxWidth.toFloat()
+        val containerHeightPx = constraints.maxHeight.toFloat()
+        val videoRect = remember(videoSize, containerWidthPx, containerHeightPx) {
+            computeFittedVideoRect(videoSize, containerWidthPx, containerHeightPx)
+        }
+
         if (controller != null) {
             AndroidView(
                 factory = { ctx ->
@@ -176,13 +203,22 @@ fun PlayerScreen(vm: AppViewModel) {
         }
 
         commentFlow?.let { flow ->
-            CommentOverlay(
-                comments = flow,
-                scale = settings?.commentScale ?: 1f,
-                alpha = settings?.commentAlpha ?: 1f,
-                speed = settings?.commentSpeed ?: "normal",
-                modifier = Modifier.fillMaxSize(),
-            )
+            // PiP 中はコメントを描画しない。通常時は動画の描画領域にだけ重ねる。
+            if (!inPip) {
+                CommentOverlay(
+                    comments = flow,
+                    scale = settings?.commentScale ?: 1f,
+                    alpha = settings?.commentAlpha ?: 1f,
+                    speed = settings?.commentSpeed ?: "normal",
+                    modifier = videoRect?.let { rect ->
+                        with(density) {
+                            Modifier
+                                .offset { IntOffset(rect.left.roundToInt(), rect.top.roundToInt()) }
+                                .size(rect.width.toDp(), rect.height.toDp())
+                        }
+                    } ?: Modifier.fillMaxSize(),
+                )
+            }
         }
 
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -477,5 +513,31 @@ fun PlayerScreen(vm: AppViewModel) {
                 }
             }
         }
+    }
+}
+
+/**
+ * レターボックス表示（RESIZE_MODE_FIT）時の動画描画矩形を計算する。
+ * 動画サイズが不明な間は null を返し、呼び出し側は全画面表示にフォールバックする。
+ */
+internal fun computeFittedVideoRect(
+    videoSize: VideoSize?,
+    containerWidthPx: Float,
+    containerHeightPx: Float,
+): Rect? {
+    val size = videoSize ?: return null
+    if (size.width <= 0 || size.height <= 0) return null
+    if (containerWidthPx <= 0f || containerHeightPx <= 0f) return null
+    val aspect = size.width * size.pixelWidthHeightRatio / size.height
+    if (aspect <= 0f) return null
+    val containerAspect = containerWidthPx / containerHeightPx
+    return if (aspect > containerAspect) {
+        val height = containerWidthPx / aspect
+        val top = (containerHeightPx - height) / 2f
+        Rect(0f, top, containerWidthPx, top + height)
+    } else {
+        val width = containerHeightPx * aspect
+        val left = (containerWidthPx - width) / 2f
+        Rect(left, 0f, left + width, containerHeightPx)
     }
 }
