@@ -182,6 +182,12 @@ class KonomiApi(
             listOf("session_id" to sessionId, "type" to "primary-audio"),
         ).toString()
 
+    fun videoMpegTsStreamUrl(videoId: Int, quality: Quality, sessionId: String): String =
+        url(
+            "api/streams/video/$videoId/${quality.apiName}/mpegts",
+            listOf("session_id" to sessionId),
+        ).toString()
+
     // --- 内部 ---
 
     private fun get(path: String, params: List<Pair<String, String?>> = emptyList()): Request =

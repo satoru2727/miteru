@@ -16,6 +16,7 @@ import io.github.satoru2727.miteru.core.model.Channel
 import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.core.model.Recording
 import io.github.satoru2727.miteru.core.log.MiteruLog
+import io.github.satoru2727.miteru.core.net.KonomiApi
 import io.github.satoru2727.miteru.core.settings.SettingsStore
 import io.github.satoru2727.miteru.data.KonomiRepository
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import kotlinx.coroutines.delay
 import kotlin.coroutines.resume
 
 data class NowPlaying(
@@ -195,20 +197,30 @@ class PlaybackLauncher(
         return true
     }
 
-    suspend fun playRecording(recording: Recording, quality: Quality, startPositionMs: Long = 0L): Boolean {
-        MiteruLog.d("Player", "playRecording id=${recording.id} quality=$quality")
-        // 録画が再生可能かをチェック（Missing/Recording 状態は再生できない）
-        if (recording.video.isMissing || recording.video.isRecording) {
-            MiteruLog.w("Player", "recording not playable: status=${recording.video.status}")
-            _playerState.value = _playerState.value.copy(error = "録画がまだ準備中です")
-            return false
-        }
-        val api = repository.api() ?: return false
+    // 録画再生用の品質フォールバックリスト（高 → 低）
+    private val recordingQualityFallback: List<Quality> = listOf(
+        Quality.Q1080P, Quality.Q810P, Quality.Q720P, Quality.Q540P,
+        Quality.Q480P, Quality.Q360P, Quality.Q240P,
+    )
+
+    /** 録画のストリーム URL を生成（HLS と MPEG-TS の両方を試す） */
+    private fun recordingStreamUrls(api: KonomiApi, videoId: Int, quality: Quality, sessionId: String): List<String> {
+        return listOf(
+            api.videoStreamUrl(videoId, quality, sessionId), // HLS
+            api.videoMpegTsStreamUrl(videoId, quality, sessionId),   // MPEG-TS
+        )
+    }
+
+    /** 指定した URL で録画を再生する（内部用） */
+    private suspend fun tryPlayRecordingUrl(
+        url: String,
+        recording: Recording,
+        quality: Quality,
+        startPositionMs: Long,
+    ): Boolean {
         val mediaController = awaitController() ?: return false
         stopSessionJobs()
 
-        val sessionId = UUID.randomUUID().toString().substringBefore('-')
-        val url = api.videoStreamUrl(recording.id, quality, sessionId)
         val metadata = MediaMetadata.Builder()
             .setTitle(recording.title)
             .setArtist(recording.channelName ?: recording.subtitle ?: "")
@@ -231,14 +243,52 @@ class PlaybackLauncher(
             quality = quality,
         )
         _playerState.value = PlayerUiState()
-        mediaController.setMediaItem(item, startPositionMs.coerceAtLeast(0L))
-        mediaController.prepare()
-        mediaController.play()
 
-        startKeepAlive(recording.id, quality, sessionId)
-        startProgressSaver(recording.id)
-        settings.setPlaybackActive(true)
-        return true
+        return try {
+            mediaController.setMediaItem(item, startPositionMs.coerceAtLeast(0L))
+            mediaController.prepare()
+            mediaController.play()
+            true
+        } catch (e: Exception) {
+            MiteruLog.w("Player", "failed to play ${MiteruLog.mask(url)}: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun playRecording(recording: Recording, quality: Quality, startPositionMs: Long = 0L): Boolean {
+        MiteruLog.d("Player", "playRecording id=${recording.id} quality=$quality")
+        // 録画が再生可能かをチェック（Missing/Recording 状態は再生できない）
+        if (recording.video.isMissing || recording.video.isRecording) {
+            MiteruLog.w("Player", "recording not playable: status=${recording.video.status}")
+            _playerState.value = _playerState.value.copy(error = "録画がまだ準備中です")
+            return false
+        }
+        val api = repository.api() ?: return false
+
+        // 要求された品質から始めてフォールバック
+        val qualitiesToTry = listOf(quality) + recordingQualityFallback.filter { it != quality }
+
+        for (q in qualitiesToTry) {
+            val sessionId = UUID.randomUUID().toString().substringBefore('-')
+            val urls = recordingStreamUrls(api, recording.id, q, sessionId)
+            for (url in urls) {
+                MiteruLog.d("Player", "trying recording stream: ${MiteruLog.mask(url)}")
+                if (tryPlayRecordingUrl(url, recording, q, startPositionMs)) {
+                    startKeepAlive(recording.id, q, sessionId)
+                    startProgressSaver(recording.id)
+                    settings.setPlaybackActive(true)
+                    return true
+                }
+                // 試行ごとに短い待ちを入れる
+                delay(200)
+            }
+        }
+
+        _playerState.value = _playerState.value.copy(
+            error = "再生可能なストリームが見つかりませんでした",
+            isBuffering = false,
+        )
+        return false
     }
 
     fun togglePlayPause() {
