@@ -6,6 +6,8 @@ import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import io.github.satoru2727.miteru.core.settings.SettingsStore
+import io.github.satoru2727.miteru.core.crash.CrashReporter
+import io.github.satoru2727.miteru.core.log.MiteruLog
 import io.github.satoru2727.miteru.data.JikkyoRepository
 import io.github.satoru2727.miteru.data.KonomiRepository
 import io.github.satoru2727.miteru.player.PlaybackLauncher
@@ -16,6 +18,10 @@ import java.util.concurrent.TimeUnit
 class AppContainer(context: Context) {
 
     val appContext: Context = context.applicationContext
+
+    init {
+        MiteruLog.install(appContext)
+    }
 
     val json: Json = Json {
         ignoreUnknownKeys = true
@@ -30,6 +36,7 @@ class AppContainer(context: Context) {
         .writeTimeout(10, TimeUnit.SECONDS)
         .build()
 
+    val crashReporter: CrashReporter = CrashReporter(appContext)
     val settings: SettingsStore = SettingsStore(appContext)
     val repository: KonomiRepository = KonomiRepository(settings, httpClient, json)
     val jikkyo: JikkyoRepository = JikkyoRepository(repository, httpClient, json)
@@ -51,6 +58,7 @@ class MiteruApplication : android.app.Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        container.crashReporter.install()
         SingletonImageLoader.setSafe { container.imageLoader }
     }
 }

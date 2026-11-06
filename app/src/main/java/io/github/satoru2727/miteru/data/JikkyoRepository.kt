@@ -1,5 +1,6 @@
 package io.github.satoru2727.miteru.data
 
+import io.github.satoru2727.miteru.core.log.MiteruLog
 import io.github.satoru2727.miteru.core.model.JikkyoComment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,9 +53,11 @@ class JikkyoRepository(
         val info = runCatching { api.jikkyoInfo(channelId) }.getOrNull()
         val watchUrl = info?.watch_session_url
         if (watchUrl == null) {
+            MiteruLog.i("Jikkyo", "comments unavailable for channel=$channelId")
             close()
             return@callbackFlow
         }
+        MiteruLog.i("Jikkyo", "connecting watch session (channel=$channelId)")
 
         var watchSocket: WebSocket? = null
         var commentSocket: WebSocket? = null
@@ -66,7 +69,12 @@ class JikkyoRepository(
             commentSocket = client.newWebSocket(
                 Request.Builder().url(url).build(),
                 object : WebSocketListener() {
+                    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                        MiteruLog.e("Jikkyo", "comment session failed (HTTP ${response?.code})", t)
+                    }
+
                     override fun onOpen(webSocket: WebSocket, response: Response) {
+                        MiteruLog.i("Jikkyo", "comment session connected")
                         val payload = buildJsonArray {
                             add(buildJsonObject { put("ping", buildJsonObject { put("content", "rs:0") }) })
                             add(buildJsonObject { put("ping", buildJsonObject { put("content", "ps:0") }) })
@@ -109,6 +117,10 @@ class JikkyoRepository(
             object : WebSocketListener() {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     webSocket.send("""{"type":"startWatching","data":{"reconnect":false}}""")
+                }
+
+                override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                    MiteruLog.e("Jikkyo", "watch session failed (HTTP ${response?.code})", t)
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) {

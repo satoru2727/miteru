@@ -104,6 +104,13 @@ export JAVA_HOME="$HOME/.local/share/mise/installs/java/temurin-21.0.13+9.0.LTS"
 - `versionCode` / `versionName` は `app/build.gradle.kts`（CI からは Gradle プロパティで上書き）
 - 提出状況: **fdroiddata に MR 提出済み**（レビュー待ち）— <https://gitlab.com/fdroid/fdroiddata/-/merge_requests/55873>
 
+## プライバシー
+
+- クラッシュレポートは **自動送信されません**。ユーザーが明示的に「共有」または「GitHub で報告」を選択したときだけ、端末外に出ます。
+- レポートに含まれるサーバーの URL は自動的に伏せられます（例: `https://<server>/api/...`）。
+- レポートには端末・OS・アプリのバージョンが含まれますが、個人を特定できる情報は含まれません。
+
+
 ## 制限事項
 
 | 項目 | 状況 | 理由 |

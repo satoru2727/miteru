@@ -1,11 +1,19 @@
 package io.github.satoru2727.miteru.ui.settings
 
+import android.content.Context
+import android.widget.Toast
+
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,7 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -50,8 +57,12 @@ import io.github.satoru2727.miteru.BuildConfig
 import io.github.satoru2727.miteru.R
 import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.core.settings.ThemeMode
+import io.github.satoru2727.miteru.ui.LocalAppContainer
 import io.github.satoru2727.miteru.ui.AppViewModel
+import io.github.satoru2727.miteru.core.log.MiteruLog
+
 import io.github.satoru2727.miteru.ui.components.SectionHeader
+import io.github.satoru2727.miteru.ui.crash.shareText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,7 +70,10 @@ fun SettingsScreen(
     vm: AppViewModel,
     onChangeServer: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val container = LocalAppContainer.current
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val logsClearedText = stringResource(R.string.settings_logs_cleared)
     val serverInfoState by vm.serverInfo.collectAsStateWithLifecycle()
     val serverInfo = serverInfoState
     val current = settings ?: return
@@ -275,6 +289,32 @@ fun SettingsScreen(
                         onCheckedChange = vm::setDynamicColor,
                     )
                 }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        SectionHeader(
+            title = stringResource(R.string.settings_support),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+        )
+        SettingsCard {
+            Column {
+                SettingRow(
+                    title = stringResource(R.string.settings_report_bug),
+                    subtitle = stringResource(R.string.settings_report_bug_desc),
+                    onClick = { shareText(context, container.crashReporter.buildReport("bug")) },
+                    trailing = { Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null) },
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                SettingRow(
+                    title = stringResource(R.string.settings_clear_logs),
+                    subtitle = stringResource(R.string.settings_support_privacy),
+                    onClick = {
+                        MiteruLog.clear()
+                        Toast.makeText(context, logsClearedText, Toast.LENGTH_SHORT).show()
+                    },
+                    trailing = { Icon(Icons.Rounded.DeleteSweep, contentDescription = null) },
+                )
             }
         }
 

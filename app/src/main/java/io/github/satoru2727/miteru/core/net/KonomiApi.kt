@@ -1,5 +1,6 @@
 package io.github.satoru2727.miteru.core.net
 
+import io.github.satoru2727.miteru.core.log.MiteruLog
 import io.github.satoru2727.miteru.core.model.Channel
 import io.github.satoru2727.miteru.core.model.Program
 import io.github.satoru2727.miteru.core.model.Quality
@@ -204,6 +205,7 @@ class KonomiApi(
         continuation.invokeOnCancellation { call.cancel() }
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
+                MiteruLog.e("Api", "request failed: ${MiteruLog.mask(call.request().url.toString())}", e)
                 if (continuation.isActive) {
                     continuation.resumeWithException(ApiException(0, e.message ?: "network error", e))
                 }
@@ -216,6 +218,10 @@ class KonomiApi(
                         val detail = runCatching {
                             json.decodeFromString<ApiErrorDto>(body).detail
                         }.getOrNull().orEmpty()
+                        MiteruLog.e(
+                            "Api",
+                            "HTTP ${res.code} ${MiteruLog.mask(call.request().url.toString())}: ${detail.ifBlank { res.message }}",
+                        )
                         if (continuation.isActive) {
                             continuation.resumeWithException(
                                 ApiException(res.code, detail.ifBlank { res.message }, null),

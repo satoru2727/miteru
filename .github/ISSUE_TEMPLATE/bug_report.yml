@@ -1,0 +1,33 @@
+name: Bug report
+about: レポートを添付してバグを報告
+labels: bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 概要 / Description
+        <!-- 起きた問題を簡潔に -->
+
+        ### 再現手順 / Steps to reproduce
+        1. ...
+
+        ### 期待される動作 / Expected behavior
+
+        ### 実際の動作 / Actual behavior
+
+        ### 端末 / Device
+        - Android:
+        - 機種:
+
+        ### アプリ / App
+        - Miteru:
+
+        ### KonomiTV サーバー / Server
+        - バックエンド: <!-- EDCB / Mirakurun -->
+        - バージョン:
+
+        ### ログ / Logs
+        <!-- アプリの設定 → サポート → 「バグを報告」でコピーした内容を貼り付けてください -->
+        ```
+
+        ```

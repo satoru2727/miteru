@@ -15,6 +15,7 @@ import com.google.common.util.concurrent.MoreExecutors
 import io.github.satoru2727.miteru.core.model.Channel
 import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.core.model.Recording
+import io.github.satoru2727.miteru.core.log.MiteruLog
 import io.github.satoru2727.miteru.core.settings.SettingsStore
 import io.github.satoru2727.miteru.data.KonomiRepository
 import kotlinx.coroutines.CoroutineScope
@@ -101,6 +102,12 @@ class PlaybackLauncher(
         }
 
         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+            val mediaUrl = controller?.currentMediaItem?.localConfiguration?.uri?.toString()
+            MiteruLog.e(
+                "Player",
+                "onPlayerError ${error.errorCodeName}(${error.errorCode}) media=${mediaUrl?.let { MiteruLog.mask(it) }} message=${error.message}",
+                error.cause ?: error,
+            )
             _playerState.value = _playerState.value.copy(
                 error = error.message ?: error.errorCodeName,
                 isBuffering = false,
@@ -140,6 +147,7 @@ class PlaybackLauncher(
     }
 
     suspend fun playLive(channel: Channel, quality: Quality): Boolean {
+        MiteruLog.d("Player", "playLive channel=${channel.id} quality=$quality")
         val api = repository.api() ?: return false
         val mediaController = awaitController() ?: return false
         stopSessionJobs()
@@ -181,6 +189,7 @@ class PlaybackLauncher(
     }
 
     suspend fun playRecording(recording: Recording, quality: Quality, startPositionMs: Long = 0L): Boolean {
+        MiteruLog.d("Player", "playRecording id=${recording.id} quality=$quality")
         val api = repository.api() ?: return false
         val mediaController = awaitController() ?: return false
         stopSessionJobs()

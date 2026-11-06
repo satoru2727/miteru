@@ -1,0 +1,5 @@
+- Crash reporting and bug report feature (never auto-send)
+- New Support section in Settings (Report a bug / Clear logs)
+- Show a crash dialog on next app launch after a crash
+- Add API/playback/comment logs (server URLs are automatically masked)
+- Add privacy policy to README

@@ -30,10 +30,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +54,7 @@ import io.github.satoru2727.miteru.R
 import io.github.satoru2727.miteru.core.settings.ThemeMode
 import io.github.satoru2727.miteru.ui.guide.GuideScreen
 import io.github.satoru2727.miteru.ui.live.LiveScreen
+import io.github.satoru2727.miteru.ui.crash.CrashReportDialog
 import io.github.satoru2727.miteru.ui.player.MiniPlayer
 import io.github.satoru2727.miteru.ui.player.PlayerScreen
 import io.github.satoru2727.miteru.ui.recordings.RecordingsScreen
@@ -58,6 +62,7 @@ import io.github.satoru2727.miteru.ui.reservations.ReservationsScreen
 import io.github.satoru2727.miteru.ui.settings.SettingsScreen
 import io.github.satoru2727.miteru.ui.setup.SetupScreen
 import io.github.satoru2727.miteru.ui.theme.KonomiTheme
+import io.github.satoru2727.miteru.ui.LocalAppContainer
 import io.github.satoru2727.miteru.ui.util.formatClock
 
 @Composable
@@ -69,7 +74,14 @@ fun AppRoot(container: AppContainer) {
     )
     val settings by vm.settings.collectAsStateWithLifecycle()
     var editingServer by rememberSaveable { mutableStateOf(false) }
+    var crashReport by remember { mutableStateOf<String?>(null) }
     val current = settings
+
+    LaunchedEffect(Unit) {
+        if (container.crashReporter.hasPendingReport()) {
+            crashReport = container.crashReporter.readPendingReport()
+        }
+    }
 
     val dark = when (current?.themeMode ?: ThemeMode.SYSTEM) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -81,7 +93,10 @@ fun AppRoot(container: AppContainer) {
         darkTheme = dark,
         dynamicColor = current?.dynamicColor ?: true,
     ) {
-        CompositionLocalProvider(LocalAppImageLoader provides container.imageLoader) {
+        CompositionLocalProvider(
+            LocalAppImageLoader provides container.imageLoader,
+            LocalAppContainer provides container,
+        ) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.background,
@@ -102,6 +117,16 @@ fun AppRoot(container: AppContainer) {
                         onChangeServer = { editingServer = true },
                     )
                 }
+            }
+
+            crashReport?.let { report ->
+                CrashReportDialog(
+                    report = report,
+                    onDismiss = {
+                        container.crashReporter.clearPendingReport()
+                        crashReport = null
+                    },
+                )
             }
         }
     }
