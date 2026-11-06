@@ -19,8 +19,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Clear
-import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -118,7 +118,7 @@ fun RecordingsScreen(vm: AppViewModel) {
             }
             Box {
                 IconButton(onClick = { sortMenu = true }) {
-                    Icon(Icons.Rounded.Sort, contentDescription = stringResource(R.string.recordings_sort))
+                    Icon(Icons.AutoMirrored.Rounded.Sort, contentDescription = stringResource(R.string.recordings_sort))
                 }
                 DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
                     DropdownMenuItem(

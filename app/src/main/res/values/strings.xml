@@ -141,6 +141,17 @@
     <string name="settings_comment_ng_hint">カンマ区切りで入力</string>
     <string name="settings_comment_ng_desc">一致するコメントを表示しません（大文字小文字は区別しません）。</string>
     <string name="settings_comment_ng_save">保存</string>
+    <string name="comment_send_title">コメントを送信</string>
+    <string name="comment_send_note">NX-Jikkyo に匿名（184）で投稿します</string>
+    <string name="comment_send_placeholder">コメントを入力（75文字まで）</string>
+    <string name="comment_send_button">送信</string>
+    <string name="comment_input_cd">コメントを書く</string>
+    <string name="comment_color_label">色</string>
+    <string name="comment_position_label">位置</string>
+    <string name="comment_position_flow">流れる</string>
+    <string name="comment_position_top">上固定</string>
+    <string name="comment_position_bottom">下固定</string>
+    <string name="comment_size_label">サイズ</string>
     <string name="guide_search">番組検索</string>
     <string name="guide_search_hint">キーワードを入力</string>
     <string name="guide_search_action">検索</string>

@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Audiotrack
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.HighQuality
@@ -86,6 +87,7 @@ import androidx.media3.ui.PlayerView
 import io.github.satoru2727.miteru.R
 import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.ui.AppViewModel
+import io.github.satoru2727.miteru.ui.CommentPostState
 import io.github.satoru2727.miteru.ui.util.findActivity
 import io.github.satoru2727.miteru.ui.util.formatClock
 import kotlinx.coroutines.delay
@@ -108,7 +110,10 @@ fun PlayerScreen(vm: AppViewModel) {
     var controlsVisible by remember { mutableStateOf(true) }
     var showQuality by remember { mutableStateOf(false) }
     var showAudio by remember { mutableStateOf(false) }
+    var showCommentInput by remember { mutableStateOf(false) }
     var scrubPosition by remember { mutableStateOf<Long?>(null) }
+
+    val liveCommentsReady by vm.liveCommentPostReady.collectAsStateWithLifecycle()
 
     BackHandler { vm.closePlayer() }
 
@@ -380,6 +385,20 @@ fun PlayerScreen(vm: AppViewModel) {
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 )
                             }
+                            if (liveCommentsReady) {
+                                IconButton(
+                                    onClick = {
+                                        vm.resetCommentPostState()
+                                        showCommentInput = true
+                                    },
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.ChatBubbleOutline,
+                                        contentDescription = stringResource(R.string.comment_input_cd),
+                                        tint = Color.White,
+                                    )
+                                }
+                            }
                             Spacer(Modifier.weight(1f))
                             IconButton(onClick = { vm.zap(-1) }) {
                                 Icon(Icons.Rounded.SkipPrevious, contentDescription = stringResource(R.string.player_channel_down), tint = Color.White)
@@ -513,6 +532,19 @@ fun PlayerScreen(vm: AppViewModel) {
                 }
             }
         }
+    }
+
+    if (showCommentInput && nowPlaying.isLive) {
+        CommentInputSheet(
+            postState = vm.commentPostState,
+            onSend = { text, color, position, size ->
+                vm.postLiveComment(text, color, position, size)
+            },
+            onDismiss = {
+                showCommentInput = false
+                vm.resetCommentPostState()
+            },
+        )
     }
 }
 

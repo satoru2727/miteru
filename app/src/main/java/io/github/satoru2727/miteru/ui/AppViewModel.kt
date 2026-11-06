@@ -20,6 +20,7 @@ import io.github.satoru2727.miteru.core.net.RecordSettingsDto
 import io.github.satoru2727.miteru.core.settings.Settings
 import io.github.satoru2727.miteru.core.settings.ThemeMode
 import io.github.satoru2727.miteru.core.util.isMeteredNetwork
+import io.github.satoru2727.miteru.data.JikkyoPostResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -392,6 +393,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun playChannel(channel: Channel) {
+        commentPostState = CommentPostState.Idle
         viewModelScope.launch {
             if (playback.playLive(channel, currentSettings.defaultQuality)) {
                 commentFlow = if (currentSettings.showComments) {
@@ -435,6 +437,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun startRecording(recording: Recording, positionMs: Long) {
+        commentPostState = CommentPostState.Idle
         viewModelScope.launch {
             if (playback.playRecording(recording, currentSettings.defaultQuality, positionMs)) {
                 commentFlow = if (currentSettings.showComments) {
@@ -484,6 +487,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun stopPlayback() {
         playback.stop()
         commentFlow = null
+        commentPostState = CommentPostState.Idle
         showPlayer = false
         playback.playerVisible = false
         viewModelScope.launch { resumePositions = settingsStore.positions() }
@@ -574,6 +578,34 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    // ---- コメント投稿 ----
+
+    /** ライブの視聴セッションが確立し、コメント投稿が可能か。 */
+    val liveCommentPostReady: StateFlow<Boolean> get() = container.jikkyo.livePostReady
+
+    /** コメント投稿の状態（送信シートが参照する）。 */
+    var commentPostState by mutableStateOf<CommentPostState>(CommentPostState.Idle)
+        private set
+
+    fun postLiveComment(text: String, color: String, position: String, size: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || trimmed.length > 75) return
+        if (commentPostState is CommentPostState.Posting) return
+        viewModelScope.launch {
+            commentPostState = CommentPostState.Posting
+            commentPostState = when (
+                val result = container.jikkyo.postLiveComment(trimmed, color, position, size)
+            ) {
+                is JikkyoPostResult.Success -> CommentPostState.Posted
+                is JikkyoPostResult.Failure -> CommentPostState.Failed(result.message)
+            }
+        }
+    }
+
+    fun resetCommentPostState() {
+        commentPostState = CommentPostState.Idle
+    }
+
     fun clearCache() {
         viewModelScope.launch {
             repository.clearChannelCache()
@@ -602,9 +634,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             reservationsState = LoadState.Idle
             guideCache.clear()
             commentFlow = null
+            commentPostState = CommentPostState.Idle
             showPlayer = false
             playback.playerVisible = false
             tab = Tab.LIVE
         }
     }
+}
+
+/** コメント投稿の UI 状態。 */
+sealed interface CommentPostState {
+    data object Idle : CommentPostState
+    data object Posting : CommentPostState
+    data object Posted : CommentPostState
+    data class Failed(val message: String) : CommentPostState
 }

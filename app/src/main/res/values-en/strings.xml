@@ -141,6 +141,17 @@
     <string name="settings_comment_ng_hint">Comma separated</string>
     <string name="settings_comment_ng_desc">Comments containing these words are hidden (case-insensitive).</string>
     <string name="settings_comment_ng_save">Save</string>
+    <string name="comment_send_title">Send a comment</string>
+    <string name="comment_send_note">Posted anonymously (184) to NX-Jikkyo</string>
+    <string name="comment_send_placeholder">Write a comment (up to 75 characters)</string>
+    <string name="comment_send_button">Send</string>
+    <string name="comment_input_cd">Write a comment</string>
+    <string name="comment_color_label">Color</string>
+    <string name="comment_position_label">Position</string>
+    <string name="comment_position_flow">Scroll</string>
+    <string name="comment_position_top">Fixed top</string>
+    <string name="comment_position_bottom">Fixed bottom</string>
+    <string name="comment_size_label">Size</string>
     <string name="guide_search">Search programs</string>
     <string name="guide_search_hint">Enter a keyword</string>
     <string name="guide_search_action">Search</string>
