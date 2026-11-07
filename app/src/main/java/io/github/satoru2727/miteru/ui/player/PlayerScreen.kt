@@ -104,6 +104,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import io.github.satoru2727.miteru.R
+import io.github.satoru2727.miteru.core.log.MiteruLog
 import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.player.saveBitmapToGallery
 import io.github.satoru2727.miteru.ui.AppViewModel
@@ -232,11 +233,17 @@ fun PlayerScreen(vm: AppViewModel) {
 
     // 動画の実表示サイズ（レターボックスを除いた描画矩形の計算に使う）
     var videoSize by remember { mutableStateOf<VideoSize?>(null) }
+    var loggedVideoSize by remember { mutableStateOf(false) }
     DisposableEffect(controller) {
         val c = controller
         val listener = object : Player.Listener {
             override fun onVideoSizeChanged(size: VideoSize) {
                 videoSize = size
+                // バグ報告で「映像が実際に描画されたか」を追えるようにする（初回のみ）
+                if (!loggedVideoSize && size.width > 0 && size.height > 0) {
+                    loggedVideoSize = true
+                    MiteruLog.i("Player", "video size ${size.width}x${size.height}")
+                }
             }
         }
         c?.addListener(listener)

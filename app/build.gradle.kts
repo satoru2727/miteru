@@ -78,6 +78,8 @@ android {
             it.maxHeapSize = "768m"
             it.maxParallelForks = 1
         }
+        // unit テスト (JVM) でも android.util.Log などが安全に呼べるようにする
+        unitTests.isReturnDefaultValues = true
     }
 
     lint {

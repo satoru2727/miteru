@@ -75,6 +75,17 @@ object MiteruLog {
                 }
             }
         }
+        // logcat にも流す（release ビルドでも `adb logcat -s Miteru` で確認できる。URL はマスク済み）
+        android.util.Log.println(
+            when (level) {
+                "D" -> android.util.Log.DEBUG
+                "I" -> android.util.Log.INFO
+                "W" -> android.util.Log.WARN
+                else -> android.util.Log.ERROR
+            },
+            "Miteru",
+            line,
+        )
         synchronized(lock) {
             buffer.addLast(line)
             while (buffer.size > MaxLines) buffer.removeFirst()
