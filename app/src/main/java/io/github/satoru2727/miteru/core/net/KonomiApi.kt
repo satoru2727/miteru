@@ -232,6 +232,20 @@ class KonomiApi(
             listOf("session_id" to sessionId),
         ).toString()
 
+    /**
+     * 消えたセッションを同じ session_id で作り直す。
+     * 0.14.1 ではセッションを作成できるのはプレイリスト API だけで、
+     * セグメントや keep-alive はセッションがないと 422 を返す。
+     */
+    suspend fun touchVideoSession(videoId: Int, quality: Quality, sessionId: String) {
+        execute(
+            get(
+                "api/streams/video/$videoId/${quality.apiName}/playlist",
+                listOf("session_id" to sessionId),
+            ),
+        )
+    }
+
     // --- 内部 ---
 
     private fun get(path: String, params: List<Pair<String, String?>> = emptyList()): Request =

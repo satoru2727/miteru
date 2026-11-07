@@ -1,0 +1,4 @@
+- Fixed recordings stopping after 10–20 seconds
+  - Cause: the stream keep-alive was sent every 10 seconds, identical to the server's session timeout, so it always lost the race and the session was destroyed (KonomiTV's own web client uses 5 seconds)
+  - The keep-alive now runs every 5 seconds, and an expired session is recreated automatically
+- Offline downloads could fail for the same reason and are fixed as well

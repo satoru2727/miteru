@@ -19,6 +19,7 @@ import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.core.model.Recording
 import io.github.satoru2727.miteru.core.model.TileInfo
 import io.github.satoru2727.miteru.core.log.MiteruLog
+import io.github.satoru2727.miteru.core.net.ApiException
 import io.github.satoru2727.miteru.core.net.KonomiApi
 import io.github.satoru2727.miteru.core.settings.SettingsStore
 import io.github.satoru2727.miteru.data.KonomiRepository
@@ -34,8 +35,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
-import kotlinx.coroutines.delay
 import kotlin.coroutines.resume
 
 private const val WATCHED_THRESHOLD_MS = 30_000L
@@ -493,9 +494,18 @@ class PlaybackLauncher(
     private fun startKeepAlive(videoId: Int, quality: Quality, sessionId: String) {
         keepAliveJob = scope.launch {
             while (true) {
-                delay(10_000L)
+                // サーバーの SESSION_TIMEOUT は 10 秒。公式クライアントと同じ 5 秒間隔で送る
+                // （10 秒間隔だとサーバーのタイマーに毎回負けて 422 になる）
+                delay(5_000L)
                 val api = repository.api() ?: continue
-                runCatching { api.keepAlive(videoId, quality, sessionId) }
+                // スタックした 1 本が次の送信を遅らせないよう、1 回の送信に上限を設ける
+                val result = withTimeoutOrNull(4_000L) {
+                    runCatching { api.keepAlive(videoId, quality, sessionId) }
+                }
+                if ((result?.exceptionOrNull() as? ApiException)?.statusCode == 422) {
+                    // セッションが消えていたら、プレイリスト API を叩いて同じ session_id で作り直す
+                    runCatching { api.touchVideoSession(videoId, quality, sessionId) }
+                }
             }
         }
     }

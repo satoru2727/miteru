@@ -6,6 +6,7 @@ import androidx.core.content.ContextCompat
 import io.github.satoru2727.miteru.core.log.MiteruLog
 import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.core.model.Recording
+import io.github.satoru2727.miteru.core.net.ApiException
 import io.github.satoru2727.miteru.player.OfflineDownloadService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -16,6 +17,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
@@ -256,10 +258,18 @@ class OfflineDownloader(
         }
 
         // プレイヤーと同じく、セグメント生成が止まらないよう keep-alive を打ち続ける
+        // サーバーのタイムアウト (10 秒) より十分短い 5 秒間隔で送る
         val keepAlive = scope.launch {
             while (true) {
-                delay(10_000L)
-                runCatching { api.keepAlive(item.videoId, quality, sessionId) }
+                delay(5_000L)
+                // スタックした 1 本が次の送信を遅らせないよう、1 回の送信に上限を設ける
+                val result = withTimeoutOrNull(4_000L) {
+                    runCatching { api.keepAlive(item.videoId, quality, sessionId) }
+                }
+                if ((result?.exceptionOrNull() as? ApiException)?.statusCode == 422) {
+                    // セッションが消えていたら、プレイリスト API で同じ session_id を作り直す
+                    runCatching { api.touchVideoSession(item.videoId, quality, sessionId) }
+                }
             }
         }
 
@@ -269,7 +279,17 @@ class OfflineDownloader(
                 val target = File(dir, segmentFileName(index))
                 if (target.exists() && target.length() > 0L) return@forEachIndexed
                 val url = playlistUrl.resolve(uri) ?: throw IOException("bad segment uri: $uri")
-                downloadToFile(url.toString(), target)
+                try {
+                    downloadToFile(url.toString(), target)
+                } catch (e: IOException) {
+                    // セッション切れ (HTTP 422) はセッションを作り直して 1 回だけやり直す
+                    if (e.message?.contains("422") == true) {
+                        runCatching { api.touchVideoSession(item.videoId, quality, sessionId) }
+                        downloadToFile(url.toString(), target)
+                    } else {
+                        throw e
+                    }
+                }
                 bytes += target.length()
                 done += 1
                 val now = System.currentTimeMillis()
