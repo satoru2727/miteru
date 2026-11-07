@@ -30,6 +30,8 @@ data class Settings(
     val commentAlpha: Float = 1f,
     val commentSpeed: String = "normal",
     val commentNgWords: String = "",
+    val showSubchannels: Boolean = true,
+    val watchedVideoIds: Set<Int> = emptySet(),
     val cachedChannelsAt: Long = 0L,
     val playbackActive: Boolean = false,
 ) {
@@ -57,6 +59,8 @@ class SettingsStore(private val context: Context) {
         val COMMENT_ALPHA = floatPreferencesKey("comment_alpha")
         val COMMENT_SPEED = stringPreferencesKey("comment_speed")
         val COMMENT_NG = stringPreferencesKey("comment_ng_words")
+        val SHOW_SUBCHANNELS = booleanPreferencesKey("show_subchannels")
+        val WATCHED_IDS = stringPreferencesKey("watched_video_ids")
         val CHANNELS_JSON = stringPreferencesKey("channels_cache_json")
         val CHANNELS_AT = longPreferencesKey("channels_cache_at")
         val POSITIONS = stringPreferencesKey("resume_positions")
@@ -78,6 +82,8 @@ class SettingsStore(private val context: Context) {
             commentAlpha = prefs[Keys.COMMENT_ALPHA] ?: 1f,
             commentSpeed = prefs[Keys.COMMENT_SPEED] ?: "normal",
             commentNgWords = prefs[Keys.COMMENT_NG] ?: "",
+            showSubchannels = prefs[Keys.SHOW_SUBCHANNELS] ?: true,
+            watchedVideoIds = decodeIdSet(prefs[Keys.WATCHED_IDS]),
             cachedChannelsAt = prefs[Keys.CHANNELS_AT] ?: 0L,
             playbackActive = prefs[Keys.PLAYBACK_ACTIVE] ?: false,
         )
@@ -129,6 +135,37 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setCommentNgWords(words: String) {
         context.miteruDataStore.edit { it[Keys.COMMENT_NG] = words }
+    }
+
+    suspend fun setShowSubchannels(enabled: Boolean) {
+        context.miteruDataStore.edit { it[Keys.SHOW_SUBCHANNELS] = enabled }
+    }
+
+    suspend fun watchedIds(): Set<Int> =
+        decodeIdSet(context.miteruDataStore.data.first()[Keys.WATCHED_IDS])
+
+    /** 録画を視聴済みとして記録する（未視聴フィルタ用）。 */
+    suspend fun markWatched(videoId: Int) {
+        writeMutex.withLock {
+            val current = watchedIds().toMutableSet()
+            if (current.add(videoId)) {
+                val encoded = encodeIdSet(current)
+                context.miteruDataStore.edit { prefs -> prefs[Keys.WATCHED_IDS] = encoded }
+            }
+        }
+    }
+
+    /** 視聴済みマークを取り消す。 */
+    suspend fun unmarkWatched(videoId: Int) {
+        writeMutex.withLock {
+            val current = watchedIds().toMutableSet()
+            if (current.remove(videoId)) {
+                val encoded = encodeIdSet(current)
+                context.miteruDataStore.edit { prefs ->
+                    if (encoded.isBlank()) prefs.remove(Keys.WATCHED_IDS) else prefs[Keys.WATCHED_IDS] = encoded
+                }
+            }
+        }
     }
 
     suspend fun cacheChannels(json: String, cachedAt: Long) {
@@ -191,3 +228,8 @@ class SettingsStore(private val context: Context) {
         }
     }
 }
+
+private fun decodeIdSet(raw: String?): Set<Int> =
+    raw.orEmpty().split(',').mapNotNull { it.trim().toIntOrNull() }.toSet()
+
+private fun encodeIdSet(ids: Set<Int>): String = ids.joinToString(",")

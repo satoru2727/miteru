@@ -1,6 +1,7 @@
 package io.github.satoru2727.miteru.core.net
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 /*
  * KonomiTV の API レスポンス DTO。
@@ -67,6 +68,55 @@ data class ReservationItemDto(
     val scheduled_recording_file_name: String = "",
     val estimated_recording_file_size: Long = 0,
     val record_settings: RecordSettingsDto? = null,
+)
+
+/*
+ * キーワード自動予約条件（EDCB バックエンドのみ）。
+ * program_search_condition は「読み取った内容をそのまま返す」ラウンドトリップが要件なので、
+ * アプリが UI で使わないフィールド（チャンネル/ジャンル/日時範囲）は JsonElement のまま保持する。
+ */
+
+@Serializable
+data class ProgramSearchConditionDto(
+    val is_enabled: Boolean = true,
+    val keyword: String = "",
+    val exclude_keyword: String = "",
+    val note: String = "",
+    val is_title_only: Boolean = false,
+    val is_case_sensitive: Boolean = false,
+    val is_fuzzy_search_enabled: Boolean = false,
+    val is_regex_search_enabled: Boolean = false,
+    val service_ranges: JsonElement? = null,
+    val genre_ranges: JsonElement? = null,
+    val is_exclude_genre_ranges: Boolean = false,
+    val date_ranges: JsonElement? = null,
+    val is_exclude_date_ranges: Boolean = false,
+    val duration_range_min: Int? = null,
+    val duration_range_max: Int? = null,
+    val broadcast_type: String = "All",
+    val duplicate_title_check_scope: String = "None",
+    val duplicate_title_check_period_days: Int = 6,
+)
+
+@Serializable
+data class ReservationConditionDto(
+    val id: Int = 0,
+    val reservation_count: Int = 0,
+    val program_search_condition: ProgramSearchConditionDto = ProgramSearchConditionDto(),
+    val record_settings: RecordSettingsDto = RecordSettingsDto(),
+)
+
+@Serializable
+data class ReservationConditionsDto(
+    val total: Int = 0,
+    val reservation_conditions: List<ReservationConditionDto> = emptyList(),
+)
+
+/** 条件の追加 (POST) と変更 (PUT) の両方で使うリクエストボディ。 */
+@Serializable
+data class ReservationConditionRequestDto(
+    val program_search_condition: ProgramSearchConditionDto,
+    val record_settings: RecordSettingsDto,
 )
 
 @Serializable
@@ -214,6 +264,31 @@ data class TimeTableDto(
 )
 
 @Serializable
+data class CmSectionDto(
+    val start_time: Double = 0.0,
+    val end_time: Double = 0.0,
+)
+
+@Serializable
+data class ThumbnailTileDto(
+    val format: String = "WebP",
+    val image_width: Int = 0,
+    val image_height: Int = 0,
+    val tile_width: Int = 0,
+    val tile_height: Int = 0,
+    val total_tiles: Int = 0,
+    val column_count: Int = 0,
+    val row_count: Int = 0,
+    val interval_sec: Double = 0.0,
+)
+
+@Serializable
+data class ThumbnailInfoDto(
+    val version: Int = 0,
+    val tile: ThumbnailTileDto? = null,
+)
+
+@Serializable
 data class RecordedVideoDto(
     val id: Int = -1,
     val status: String = "Recorded",
@@ -239,6 +314,8 @@ data class RecordedVideoDto(
     val secondary_audio_codec: String? = null,
     val secondary_audio_channel: String? = null,
     val secondary_audio_sampling_rate: Int? = null,
+    val cm_sections: List<CmSectionDto>? = null,
+    val thumbnail_info: ThumbnailInfoDto? = null,
 )
 
 @Serializable
@@ -277,6 +354,31 @@ data class RecordedProgramDto(
 data class RecordedProgramsDto(
     val total: Int = 0,
     val recorded_programs: List<RecordedProgramDto> = emptyList(),
+)
+
+@Serializable
+data class SeriesBroadcastPeriodDto(
+    val channel: ChannelDto? = null,
+    val start_date: String = "",
+    val end_date: String = "",
+    val recorded_programs: List<RecordedProgramDto> = emptyList(),
+)
+
+@Serializable
+data class SeriesDto(
+    val id: Int = -1,
+    val title: String = "",
+    val description: String = "",
+    val genres: List<GenreDto> = emptyList(),
+    val broadcast_periods: List<SeriesBroadcastPeriodDto> = emptyList(),
+    val created_at: String = "",
+    val updated_at: String = "",
+)
+
+@Serializable
+data class SeriesListDto(
+    val total: Int = 0,
+    val series_list: List<SeriesDto> = emptyList(),
 )
 
 @Serializable

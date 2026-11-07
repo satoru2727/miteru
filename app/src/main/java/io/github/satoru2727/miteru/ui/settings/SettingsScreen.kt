@@ -177,6 +177,17 @@ fun SettingsScreen(
                         )
                     },
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                SettingRow(
+                    title = stringResource(R.string.settings_subchannels),
+                    subtitle = stringResource(R.string.settings_subchannels_desc),
+                    trailing = {
+                        Switch(
+                            checked = current.showSubchannels,
+                            onCheckedChange = vm::setShowSubchannels,
+                        )
+                    },
+                )
             }
         }
 

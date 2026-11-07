@@ -2,6 +2,7 @@ package io.github.satoru2727.miteru.core.net
 
 import io.github.satoru2727.miteru.core.model.Channel
 import io.github.satoru2727.miteru.core.model.ChannelType
+import io.github.satoru2727.miteru.core.model.CmSection
 import io.github.satoru2727.miteru.core.model.Genre
 import io.github.satoru2727.miteru.core.model.JikkyoComment
 import io.github.satoru2727.miteru.core.model.Program
@@ -10,7 +11,10 @@ import io.github.satoru2727.miteru.core.model.RecordingsPage
 import io.github.satoru2727.miteru.core.model.ReservationItem
 import io.github.satoru2727.miteru.core.model.ReservationsPage
 import io.github.satoru2727.miteru.core.model.Reservation
+import io.github.satoru2727.miteru.core.model.Series
+import io.github.satoru2727.miteru.core.model.SeriesPeriod
 import io.github.satoru2727.miteru.core.model.ServerInfo
+import io.github.satoru2727.miteru.core.model.TileInfo
 import io.github.satoru2727.miteru.core.model.Timetable
 import io.github.satoru2727.miteru.core.model.TimetableChannel
 import io.github.satoru2727.miteru.core.model.VideoInfo
@@ -104,6 +108,7 @@ fun ChannelDto.toDomain(): Channel = Channel(
     viewerCount = viewer_count,
     current = program_present?.toDomain(),
     next = program_following?.toDomain(),
+    jikkyoForce = jikkyo_force,
 )
 
 fun LiveChannelsDto.toDomain(): List<Channel> {
@@ -147,6 +152,16 @@ fun RecordedVideoDto.toDomain(): VideoInfo = VideoInfo(
     hasStreamChanges = has_video_stream_changes,
 )
 
+fun CmSectionDto.toDomain(): CmSection = CmSection(startSeconds = start_time, endSeconds = end_time)
+
+fun ThumbnailTileDto.toDomain(): TileInfo = TileInfo(
+    tileWidth = tile_width,
+    tileHeight = tile_height,
+    totalTiles = total_tiles,
+    columnCount = column_count,
+    intervalSeconds = interval_sec,
+)
+
 fun RecordedProgramDto.toDomain(): Recording = Recording(
     id = id,
     title = title.ifBlank { "無題の録画" },
@@ -160,12 +175,32 @@ fun RecordedProgramDto.toDomain(): Recording = Recording(
     episodeNumber = episode_number,
     genres = genres.map { it.toDomain() },
     video = recorded_video.toDomain(),
+    cmSections = recorded_video.cm_sections.orEmpty().map { it.toDomain() },
+    tileInfo = recorded_video.thumbnail_info?.tile?.takeIf { it.total_tiles > 0 }?.toDomain(),
 )
 
 fun RecordedProgramsDto.toDomain(): RecordingsPage = RecordingsPage(
     total = total,
     items = recorded_programs.map { it.toDomain() },
 )
+
+fun SeriesBroadcastPeriodDto.toDomain(): SeriesPeriod = SeriesPeriod(
+    channelName = channel?.name,
+    channelId = channel?.display_channel_id,
+    startDate = start_date,
+    endDate = end_date,
+    recordings = recorded_programs.map { it.toDomain() },
+)
+
+fun SeriesDto.toDomain(): Series = Series(
+    id = id,
+    title = title.ifBlank { "無題のシリーズ" },
+    description = description,
+    genres = genres.map { it.toDomain() },
+    periods = broadcast_periods.map { it.toDomain() },
+)
+
+fun SeriesListDto.toDomain(): Pair<Int, List<Series>> = total to series_list.map { it.toDomain() }
 
 /** 録画の長さが 0 のときに start_time と end_time から補う。 */
 fun RecordedProgramDto.durationOrFallback(): Long {

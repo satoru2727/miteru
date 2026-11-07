@@ -14,8 +14,10 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import io.github.satoru2727.miteru.core.model.Channel
+import io.github.satoru2727.miteru.core.model.CmSection
 import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.core.model.Recording
+import io.github.satoru2727.miteru.core.model.TileInfo
 import io.github.satoru2727.miteru.core.log.MiteruLog
 import io.github.satoru2727.miteru.core.net.KonomiApi
 import io.github.satoru2727.miteru.core.settings.SettingsStore
@@ -35,6 +37,8 @@ import java.util.UUID
 import kotlinx.coroutines.delay
 import kotlin.coroutines.resume
 
+private const val WATCHED_THRESHOLD_MS = 30_000L
+
 data class NowPlaying(
     val isLive: Boolean,
     val title: String,
@@ -43,6 +47,8 @@ data class NowPlaying(
     val videoId: Int?,
     val logoUrl: String?,
     val quality: Quality,
+    val cmSections: List<CmSection> = emptyList(),
+    val tileInfo: TileInfo? = null,
 )
 
 data class PlayerUiState(
@@ -296,6 +302,8 @@ class PlaybackLauncher(
             videoId = recording.id,
             logoUrl = null,
             quality = stream.quality,
+            cmSections = recording.cmSections,
+            tileInfo = recording.tileInfo,
         )
         _playerState.value = PlayerUiState()
 
@@ -355,7 +363,10 @@ class PlaybackLauncher(
         val videoId = activeVideoId
         val position = player?.currentPosition ?: 0L
         if (videoId != null && position > 0) {
-            scope.launch { settings.savePosition(videoId, position) }
+            scope.launch {
+                settings.savePosition(videoId, position)
+                if (position >= WATCHED_THRESHOLD_MS) settings.markWatched(videoId)
+            }
         }
         player?.stop()
         player?.clearMediaItems()
@@ -390,6 +401,24 @@ class PlaybackLauncher(
             isPlaying = mediaController.isPlaying,
             durationMs = mediaController.duration.coerceAtLeast(0L),
         )
+
+        // コールドスタート復元時は録画情報が無いので、CM 区間とタイル情報を後から補う
+        if (!isLive) {
+            val restoredVideoId = id.toIntOrNull()
+            if (restoredVideoId != null) {
+                scope.launch {
+                    repository.loadRecording(restoredVideoId).onSuccess { recording ->
+                        val current = _nowPlaying.value
+                        if (current != null && current.videoId == restoredVideoId) {
+                            _nowPlaying.value = current.copy(
+                                cmSections = recording.cmSections,
+                                tileInfo = recording.tileInfo,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /** 画質変更など、同じコンテンツを別 URL で開き直すときに使う。 */
@@ -418,11 +447,17 @@ class PlaybackLauncher(
 
     private fun startProgressSaver(videoId: Int) {
         progressJob = scope.launch {
+            var watchedMarked = false
             while (true) {
                 delay(5_000L)
                 val player = controller ?: continue
                 if (player.isPlaying && player.currentPosition > 0) {
                     settings.savePosition(videoId, player.currentPosition)
+                    // 30 秒以上見たら「視聴済み」として記録する（未視聴フィルタ用）
+                    if (!watchedMarked && player.currentPosition >= WATCHED_THRESHOLD_MS) {
+                        watchedMarked = true
+                        settings.markWatched(videoId)
+                    }
                 }
             }
         }

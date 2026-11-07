@@ -8,9 +8,12 @@ import io.github.satoru2727.miteru.core.model.RecordPreset
 import io.github.satoru2727.miteru.core.model.RecordingsPage
 import io.github.satoru2727.miteru.core.model.ReservationsPage
 import io.github.satoru2727.miteru.core.model.ServerInfo
+import io.github.satoru2727.miteru.core.model.Series
 import io.github.satoru2727.miteru.core.model.Timetable
 import io.github.satoru2727.miteru.core.net.KonomiApi
 import io.github.satoru2727.miteru.core.net.RecordSettingsDto
+import io.github.satoru2727.miteru.core.net.ReservationConditionDto
+import io.github.satoru2727.miteru.core.net.ReservationConditionRequestDto
 import io.github.satoru2727.miteru.core.net.LiveChannelsDto
 import io.github.satoru2727.miteru.core.net.toDomain
 import io.github.satoru2727.miteru.core.settings.SettingsStore
@@ -162,6 +165,46 @@ class KonomiRepository(
     suspend fun loadRecording(id: Int): Result<Recording> {
         val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
         return runCatching { api.recording(id) }
+    }
+
+    // ---- キーワード自動予約条件（EDCB のみ） ----
+
+    suspend fun loadReservationConditions(): Result<List<ReservationConditionDto>> {
+        val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
+        return runCatching { api.reservationConditions().reservation_conditions }
+    }
+
+    suspend fun addReservationCondition(body: ReservationConditionRequestDto): Result<Unit> {
+        val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
+        return runCatching { api.addReservationCondition(body) }
+    }
+
+    suspend fun updateReservationCondition(id: Int, body: ReservationConditionRequestDto): Result<Unit> {
+        val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
+        return runCatching { api.updateReservationCondition(id, body) }
+    }
+
+    suspend fun deleteReservationCondition(id: Int): Result<Unit> {
+        val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
+        return runCatching { api.deleteReservationCondition(id) }
+    }
+
+    // ---- シリーズ番組 ----
+
+    suspend fun loadSeries(
+        page: Int = 1,
+        order: String = "desc",
+        query: String? = null,
+    ): Result<Pair<Int, List<Series>>> {
+        val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
+        return runCatching {
+            val dto = if (query.isNullOrBlank()) {
+                api.seriesList(page, order)
+            } else {
+                api.seriesSearch(query, page, order)
+            }
+            dto.toDomain()
+        }
     }
 
     suspend fun clearChannelCache() {

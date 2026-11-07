@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,8 +64,10 @@ import io.github.satoru2727.miteru.ui.components.EmptyState
 import io.github.satoru2727.miteru.ui.components.ErrorState
 import io.github.satoru2727.miteru.ui.components.SkeletonCard
 import io.github.satoru2727.miteru.ui.components.channelTypeLabel
+import io.github.satoru2727.miteru.ui.util.JikkyoForceTier
 import io.github.satoru2727.miteru.ui.util.formatRelative
 import io.github.satoru2727.miteru.ui.util.formatTimeRange
+import io.github.satoru2727.miteru.ui.util.jikkyoForceTier
 import kotlinx.coroutines.delay
 import java.time.Instant
 
@@ -77,6 +80,7 @@ fun LiveScreen(vm: AppViewModel) {
     val serverInfo by vm.serverInfo.collectAsStateWithLifecycle()
     val lastRefresh by vm.lastChannelRefresh.collectAsStateWithLifecycle()
     val nowPlaying by vm.nowPlaying.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
 
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(Unit) {
@@ -87,8 +91,10 @@ fun LiveScreen(vm: AppViewModel) {
     }
 
     val channels = (state as? LoadState.Success)?.value.orEmpty()
-    val visible = remember(channels, query, filter) {
+    val showSubchannels = settings?.showSubchannels ?: true
+    val visible = remember(channels, query, filter, showSubchannels) {
         channels.filter { channel ->
+            val matchesSubchannel = showSubchannels || !channel.isSubchannel
             val matchesType = when (filter) {
                 ChannelFilter.ALL -> true
                 ChannelFilter.GR -> channel.type == ChannelType.GR
@@ -99,7 +105,7 @@ fun LiveScreen(vm: AppViewModel) {
             val matchesQuery = query.isBlank() ||
                 channel.name.contains(query, ignoreCase = true) ||
                 channel.current?.title?.contains(query, ignoreCase = true) == true
-            matchesType && matchesQuery
+            matchesSubchannel && matchesType && matchesQuery
         }
     }
 
@@ -350,6 +356,11 @@ private fun ChannelCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.weight(1f))
+                    val forceTier = jikkyoForceTier(channel.jikkyoForce)
+                    if (forceTier != JikkyoForceTier.NORMAL) {
+                        JikkyoForceBadge(forceTier)
+                        Spacer(Modifier.width(6.dp))
+                    }
                     if (channel.viewerCount > 0) {
                         Icon(
                             Icons.Rounded.People,
@@ -367,5 +378,34 @@ private fun ChannelCard(
                 }
             }
         }
+    }
+}
+
+/** ニコニコ実況の勢い（多 / 激多 / 祭）。KonomiTV 本体と同じ閾値・色使い。 */
+@Composable
+private fun JikkyoForceBadge(tier: JikkyoForceTier) {
+    val labelRes = when (tier) {
+        JikkyoForceTier.MANY -> R.string.live_force_many
+        JikkyoForceTier.SO_MANY -> R.string.live_force_so_many
+        JikkyoForceTier.FESTIVAL -> R.string.live_force_festival
+        JikkyoForceTier.NORMAL -> return
+    }
+    val color = when (tier) {
+        JikkyoForceTier.MANY -> Color(0xFFF59E0B)
+        JikkyoForceTier.SO_MANY -> Color(0xFFF97316)
+        JikkyoForceTier.FESTIVAL -> Color(0xFFEF4444)
+        JikkyoForceTier.NORMAL -> return
+    }
+    Surface(
+        color = color.copy(alpha = 0.16f),
+        shape = RoundedCornerShape(5.dp),
+    ) {
+        Text(
+            text = stringResource(labelRes),
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+        )
     }
 }

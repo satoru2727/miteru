@@ -1,5 +1,6 @@
 package io.github.satoru2727.miteru.ui
 
+import android.graphics.Bitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -13,14 +14,21 @@ import io.github.satoru2727.miteru.core.model.Quality
 import io.github.satoru2727.miteru.core.model.RecordPreset
 import io.github.satoru2727.miteru.core.model.Recording
 import io.github.satoru2727.miteru.core.model.ReservationItem
+import io.github.satoru2727.miteru.core.model.Series
 import io.github.satoru2727.miteru.core.model.ServerInfo
+import io.github.satoru2727.miteru.core.model.TileInfo
 import io.github.satoru2727.miteru.core.model.Timetable
 import io.github.satoru2727.miteru.core.net.KonomiApi
+import io.github.satoru2727.miteru.core.net.ProgramSearchConditionDto
 import io.github.satoru2727.miteru.core.net.RecordSettingsDto
+import io.github.satoru2727.miteru.core.net.ReservationConditionDto
+import io.github.satoru2727.miteru.core.net.ReservationConditionRequestDto
 import io.github.satoru2727.miteru.core.settings.Settings
 import io.github.satoru2727.miteru.core.settings.ThemeMode
 import io.github.satoru2727.miteru.core.util.isMeteredNetwork
 import io.github.satoru2727.miteru.data.JikkyoPostResult
+import io.github.satoru2727.miteru.ui.player.decodeTileRegion
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -30,8 +38,14 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import okhttp3.Request
+import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -42,6 +56,9 @@ enum class ChannelFilter { ALL, GR, BS, CS, OTHER }
 enum class GuideFilter { ALL, GR, BS, CS }
 
 enum class RecordingFilter { ALL, TS, MP4 }
+
+/** フィルタ用に全件取得するときのページ上限（30 件 × 30 = 900 件）。 */
+private const val MAX_RECORDINGS_PAGES = 30
 
 data class PendingResume(val recording: Recording, val positionMs: Long)
 
@@ -61,6 +78,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         SharingStarted.Eagerly,
         null,
     )
+
+    /** 視聴済みの録画 ID（未視聴フィルタ用）。 */
+    val watchedIds: StateFlow<Set<Int>> = settingsStore.settings
+        .map { it.watchedVideoIds }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
     val serverInfo: StateFlow<ServerInfo?> = repository.serverInfo
     val lastChannelRefresh = repository.lastChannelRefresh
     val nowPlaying = playback.nowPlaying
@@ -104,6 +126,22 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     var recordPresets by mutableStateOf<List<RecordPreset>>(emptyList())
         private set
 
+    // キーワード自動予約条件（EDCB のみ）
+    var conditionsState by mutableStateOf<LoadState<List<ReservationConditionDto>>>(LoadState.Idle)
+        private set
+
+    // シリーズ番組
+    var seriesState by mutableStateOf<LoadState<List<Series>>>(LoadState.Idle)
+        private set
+    var seriesQuery by mutableStateOf("")
+        private set
+    var loadingMoreSeries by mutableStateOf(false)
+        private set
+
+    private var seriesPage = 1
+    private var seriesTotal = 0
+    private var seriesSearchJob: Job? = null
+
     // 番組検索（EDCB バックエンドのみ）
     var searchState by mutableStateOf<LoadState<List<Program>>>(LoadState.Idle)
         private set
@@ -121,6 +159,14 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         private set
     var loadingMore by mutableStateOf(false)
         private set
+    var recordingsUnwatchedOnly by mutableStateOf(false)
+        private set
+    var recordingsGenre by mutableStateOf<String?>(null)
+        private set
+    var recordingsAllLoaded by mutableStateOf(false)
+        private set
+    var recordingsCapped by mutableStateOf(false)
+        private set
     var resumePositions by mutableStateOf<Map<Int, Long>>(emptyMap())
         private set
     var pendingResume by mutableStateOf<PendingResume?>(null)
@@ -130,6 +176,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     private var recordingsPage = 1
     private var recordingsTotal = 0
+    private var recordingsFetchJob: Job? = null
     private var searchJob: Job? = null
 
     private val currentSettings: Settings get() = settings.value ?: Settings()
@@ -305,10 +352,107 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             loadReservations(force = true)
         }
 
+    // ---- キーワード自動予約条件（EDCB のみ） ----
+
+    fun loadConditions(force: Boolean = false) {
+        viewModelScope.launch {
+            if (force || conditionsState !is LoadState.Success) conditionsState = LoadState.Loading
+            repository.loadReservationConditions()
+                .onSuccess { conditionsState = LoadState.Success(it) }
+                .onFailure { error ->
+                    if (conditionsState !is LoadState.Success) conditionsState = LoadState.Failure(error)
+                }
+        }
+    }
+
+    suspend fun addCondition(
+        keyword: String,
+        excludeKeyword: String,
+        note: String,
+        isEnabled: Boolean,
+        recordSettings: RecordSettingsDto = RecordSettingsDto(),
+    ): Result<Unit> = repository.addReservationCondition(
+        ReservationConditionRequestDto(
+            program_search_condition = ProgramSearchConditionDto(
+                is_enabled = isEnabled,
+                keyword = keyword,
+                exclude_keyword = excludeKeyword,
+                note = note,
+            ),
+            record_settings = recordSettings,
+        ),
+    ).onSuccess { loadConditions(force = true) }
+
+    /** UI で扱わないフィールドを保持したまま有効/無効だけを切り替える。 */
+    suspend fun setConditionEnabled(condition: ReservationConditionDto, enabled: Boolean): Result<Unit> {
+        val updated = condition.copy(
+            program_search_condition = condition.program_search_condition.copy(is_enabled = enabled),
+        )
+        return repository.updateReservationCondition(
+            updated.id,
+            ReservationConditionRequestDto(updated.program_search_condition, updated.record_settings),
+        ).onSuccess { loadConditions(force = true) }
+    }
+
+    suspend fun deleteCondition(id: Int): Result<Unit> =
+        repository.deleteReservationCondition(id).onSuccess { loadConditions(force = true) }
+
+    // ---- シリーズ番組 ----
+
+    fun onSeriesQueryChange(value: String) {
+        seriesQuery = value
+        seriesSearchJob?.cancel()
+        seriesSearchJob = viewModelScope.launch {
+            delay(350)
+            loadSeries(refresh = true)
+        }
+    }
+
+    fun loadSeries(refresh: Boolean = true) {
+        if (refresh) seriesPage = 1
+        viewModelScope.launch {
+            if (refresh) seriesState = LoadState.Loading
+            val query = seriesQuery.takeIf { it.isNotBlank() }
+            repository.loadSeries(page = seriesPage, query = query)
+                .onSuccess { (total, items) ->
+                    seriesTotal = total
+                    val existing = if (refresh) emptyList() else {
+                        (seriesState as? LoadState.Success)?.value.orEmpty()
+                    }
+                    seriesState = LoadState.Success((existing + items).distinctBy { it.id })
+                }
+                .onFailure { error ->
+                    if (seriesState !is LoadState.Success) seriesState = LoadState.Failure(error)
+                }
+        }
+    }
+
+    fun loadMoreSeries() {
+        val loaded = (seriesState as? LoadState.Success)?.value ?: return
+        if (loadingMoreSeries || loaded.size >= seriesTotal) return
+        loadingMoreSeries = true
+        seriesPage += 1
+        viewModelScope.launch {
+            val query = seriesQuery.takeIf { it.isNotBlank() }
+            repository.loadSeries(page = seriesPage, query = query)
+                .onSuccess { (_, items) ->
+                    val existing = (seriesState as? LoadState.Success)?.value.orEmpty()
+                    seriesState = LoadState.Success((existing + items).distinctBy { it.id })
+                }
+            loadingMoreSeries = false
+        }
+    }
+
     // ---- 録画 ----
 
     fun loadRecordings(refresh: Boolean = true) {
-        if (refresh) recordingsPage = 1
+        if (refresh) {
+            recordingsPage = 1
+            recordingsAllLoaded = false
+            recordingsCapped = false
+            recordingsFetchJob?.cancel()
+            recordingsFetchJob = null
+        }
         viewModelScope.launch {
             if (refresh) recordingsState = LoadState.Loading
             val query = recordingsQuery.takeIf { it.isNotBlank() }
@@ -359,6 +503,48 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         if (order == recordingsOrder) return
         recordingsOrder = order
         loadRecordings(refresh = true)
+    }
+
+    fun changeRecordingsUnwatchedOnly(enabled: Boolean) {
+        recordingsUnwatchedOnly = enabled
+    }
+
+    fun changeRecordingsGenre(genre: String?) {
+        recordingsGenre = genre
+    }
+
+    /**
+     * 未視聴・ジャンルフィルタは読み込み済みの一覧に対して行うため、
+     * フィルタが有効になったら全ページを取得しておく（上限 MAX_RECORDINGS_PAGES ページ）。
+     */
+    fun ensureAllRecordings() {
+        if (recordingsAllLoaded || recordingsFetchJob?.isActive == true) return
+        val loaded = (recordingsState as? LoadState.Success)?.value ?: return
+        if (loaded.size >= recordingsTotal) {
+            recordingsAllLoaded = true
+            return
+        }
+        recordingsFetchJob = viewModelScope.launch {
+            while (true) {
+                val current = (recordingsState as? LoadState.Success)?.value ?: break
+                if (current.size >= recordingsTotal || recordingsPage >= MAX_RECORDINGS_PAGES) break
+                recordingsPage += 1
+                val query = recordingsQuery.takeIf { it.isNotBlank() }
+                val page = repository.loadRecordings(
+                    page = recordingsPage,
+                    order = recordingsOrder,
+                    query = query,
+                ).getOrNull() ?: break
+                recordingsTotal = page.total
+                recordingsState = LoadState.Success(
+                    ((recordingsState as? LoadState.Success)?.value.orEmpty() + page.items)
+                        .distinctBy { it.id },
+                )
+            }
+            val final = (recordingsState as? LoadState.Success)?.value.orEmpty()
+            recordingsAllLoaded = true
+            recordingsCapped = final.size < recordingsTotal
+        }
     }
 
     // ---- 再生 ----
@@ -500,7 +686,8 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     /** ライブ視聴中に前後のチャンネルへ移動する。 */
     fun zap(delta: Int) {
-        val channels = (channelsState as? LoadState.Success)?.value.orEmpty()
+        val all = (channelsState as? LoadState.Success)?.value.orEmpty()
+        val channels = if (currentSettings.showSubchannels) all else all.filter { !it.isSubchannel }
         if (channels.isEmpty()) return
         val currentId = nowPlaying.value?.channelId
         val index = channels.indexOfFirst { it.displayId == currentId }
@@ -544,6 +731,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setCommentNgWords(words: String) {
         viewModelScope.launch { settingsStore.setCommentNgWords(words) }
+    }
+
+    fun setShowSubchannels(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setShowSubchannels(enabled) }
     }
 
     /** NG ワードに一致するコメントを落とす。 */
@@ -606,6 +797,56 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         commentPostState = CommentPostState.Idle
     }
 
+    // ---- シークプレビュー（タイルサムネイル） ----
+
+    private val tileMutex = Mutex()
+    private var tileSpriteCache: Pair<Int, File>? = null
+
+    /** スプライト画像を事前にダウンロードしておく（失敗しても無視）。 */
+    fun prefetchTileSprite(videoId: Int) {
+        viewModelScope.launch { runCatching { tileSprite(videoId) } }
+    }
+
+    /** 再生位置に対応するタイル画像を切り出して返す。 */
+    suspend fun tilePreview(videoId: Int, info: TileInfo, positionMs: Long): Bitmap? =
+        withContext(Dispatchers.IO) {
+            val file = tileSprite(videoId) ?: return@withContext null
+            decodeTileRegion(file, info, positionMs / 1000.0)
+        }
+
+    /** スプライト画像をキャッシュへダウンロードして返す。 */
+    private suspend fun tileSprite(videoId: Int): File? = withContext(Dispatchers.IO) {
+        tileMutex.withLock {
+            tileSpriteCache?.let { (cachedId, cachedFile) ->
+                if (cachedId == videoId && cachedFile.exists()) return@withLock cachedFile
+            }
+            val dir = File(container.appContext.cacheDir, "tiles").apply { mkdirs() }
+            val file = File(dir, "video_$videoId.webp")
+            if (file.exists() && file.length() > 0L) {
+                tileSpriteCache = videoId to file
+                return@withLock file
+            }
+            val api = repository.api() ?: return@withLock null
+            val request = Request.Builder().url(api.tileThumbnailUrl(videoId)).build()
+            val ok = runCatching {
+                container.httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use false
+                    val body = response.body ?: return@use false
+                    body.byteStream().use { input ->
+                        file.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    true
+                }
+            }.getOrDefault(false)
+            if (!ok) {
+                file.delete()
+                return@withLock null
+            }
+            tileSpriteCache = videoId to file
+            file
+        }
+    }
+
     fun clearCache() {
         viewModelScope.launch {
             repository.clearChannelCache()
@@ -632,6 +873,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             guideState = LoadState.Idle
             recordingsState = LoadState.Idle
             reservationsState = LoadState.Idle
+            conditionsState = LoadState.Idle
+            seriesState = LoadState.Idle
+            recordingsUnwatchedOnly = false
+            recordingsGenre = null
+            recordingsAllLoaded = false
+            recordingsCapped = false
             guideCache.clear()
             commentFlow = null
             commentPostState = CommentPostState.Idle

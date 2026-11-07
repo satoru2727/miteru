@@ -1,12 +1,14 @@
 package io.github.satoru2727.miteru.ui.player
 
 import android.app.PictureInPictureParams
+import android.graphics.Bitmap
 import android.util.Rational
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -33,7 +35,9 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
@@ -61,10 +65,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -112,6 +121,7 @@ fun PlayerScreen(vm: AppViewModel) {
     var showAudio by remember { mutableStateOf(false) }
     var showCommentInput by remember { mutableStateOf(false) }
     var scrubPosition by remember { mutableStateOf<Long?>(null) }
+    var cropMode by remember { mutableStateOf(false) }
 
     val liveCommentsReady by vm.liveCommentPostReady.collectAsStateWithLifecycle()
 
@@ -171,6 +181,26 @@ fun PlayerScreen(vm: AppViewModel) {
 
     val commentFlow = vm.commentFlow
 
+    // シークプレビュー用のスプライト画像を先読みしておく
+    LaunchedEffect(nowPlaying.videoId) {
+        val videoId = nowPlaying.videoId
+        if (videoId != null && nowPlaying.tileInfo?.isUsable == true) {
+            vm.prefetchTileSprite(videoId)
+        }
+    }
+
+    // シーク中に表示するプレビュータイル（スプライトから切り出し）
+    val previewTile by produceState<Bitmap?>(null, scrubPosition, nowPlaying.videoId) {
+        val pos = scrubPosition
+        val info = nowPlaying.tileInfo
+        val videoId = nowPlaying.videoId
+        if (pos == null || info == null || !info.isUsable || videoId == null) {
+            value = null
+            return@produceState
+        }
+        value = vm.tilePreview(videoId, info, pos)
+    }
+
     // 動画の実表示サイズ（レターボックスを除いた描画矩形の計算に使う）
     var videoSize by remember { mutableStateOf<VideoSize?>(null) }
     DisposableEffect(controller) {
@@ -185,7 +215,7 @@ fun PlayerScreen(vm: AppViewModel) {
         onDispose { c?.removeListener(listener) }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).clipToBounds()) {
         val density = LocalDensity.current
         val containerWidthPx = constraints.maxWidth.toFloat()
         val containerHeightPx = constraints.maxHeight.toFloat()
@@ -203,7 +233,12 @@ fun PlayerScreen(vm: AppViewModel) {
                     }
                 },
                 update = { it.player = controller },
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(
+                        scaleX = if (cropMode) CROP_SCALE else 1f,
+                        scaleY = if (cropMode) CROP_SCALE else 1f,
+                    ),
             )
         }
 
@@ -307,6 +342,13 @@ fun PlayerScreen(vm: AppViewModel) {
                             Icon(Icons.Rounded.Audiotrack, contentDescription = stringResource(R.string.player_audio), tint = Color.White)
                         }
                     }
+                    IconButton(onClick = { cropMode = !cropMode }) {
+                        Icon(
+                            Icons.Rounded.Crop,
+                            contentDescription = stringResource(R.string.player_crop),
+                            tint = if (cropMode) MaterialTheme.colorScheme.primary else Color.White,
+                        )
+                    }
                     if (activity != null) {
                         IconButton(
                             onClick = {
@@ -358,6 +400,20 @@ fun PlayerScreen(vm: AppViewModel) {
                 ) {
                     if (!nowPlaying.isLive && duration > 0) {
                         val shown = scrubPosition ?: position
+                        val preview = previewTile
+                        if (scrubPosition != null && preview != null) {
+                            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
+                                Image(
+                                    bitmap = preview.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier
+                                        .size(width = 168.dp, height = 95.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
+                        }
                         Slider(
                             value = shown.coerceIn(0L, duration).toFloat(),
                             onValueChange = { scrubPosition = it.toLong() },
@@ -367,6 +423,39 @@ fun PlayerScreen(vm: AppViewModel) {
                             },
                             valueRange = 0f..duration.toFloat(),
                         )
+                        val cmTarget = if (scrubPosition == null) {
+                            cmSkipTargetMs(position, nowPlaying.cmSections)
+                        } else {
+                            null
+                        }
+                        if (cmTarget != null) {
+                            val remaining = cmRemainingSeconds(position, nowPlaying.cmSections) ?: 0
+                            Surface(
+                                onClick = { vm.seekTo(cmTarget) },
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(10.dp),
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.FastForward,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = stringResource(R.string.player_cm_skip, remaining),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                        }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(formatClock(shown), color = Color.White, style = MaterialTheme.typography.labelSmall)
                             Text(formatClock(duration), color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
@@ -547,6 +636,9 @@ fun PlayerScreen(vm: AppViewModel) {
         )
     }
 }
+
+/** L字カット時の拡大率。画面の縁を切って番組内容を大きく表示する。 */
+private const val CROP_SCALE = 1.15f
 
 /**
  * レターボックス表示（RESIZE_MODE_FIT）時の動画描画矩形を計算する。

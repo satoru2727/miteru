@@ -85,6 +85,7 @@ data class Channel(
     val viewerCount: Int,
     val current: Program?,
     val next: Program?,
+    val jikkyoForce: Int? = null,
 ) {
     val hasCurrentProgram: Boolean get() = current != null
 }
@@ -104,6 +105,24 @@ data class VideoInfo(
     val isMissing: Boolean get() = status == "Missing" || status == "AnalysisFailed"
 }
 
+/** 録画に埋め込まれた CM 区間（秒、録画先頭基準）。 */
+data class CmSection(
+    val startSeconds: Double,
+    val endSeconds: Double,
+)
+
+/** タイルサムネイル（シークプレビュー用）の情報。 */
+data class TileInfo(
+    val tileWidth: Int,
+    val tileHeight: Int,
+    val totalTiles: Int,
+    val columnCount: Int,
+    val intervalSeconds: Double,
+) {
+    val isUsable: Boolean
+        get() = tileWidth > 0 && tileHeight > 0 && totalTiles > 0 && columnCount > 0 && intervalSeconds > 0
+}
+
 data class Recording(
     val id: Int,
     val title: String,
@@ -117,6 +136,8 @@ data class Recording(
     val episodeNumber: String?,
     val genres: List<Genre>,
     val video: VideoInfo,
+    val cmSections: List<CmSection> = emptyList(),
+    val tileInfo: TileInfo? = null,
 ) {
     val displayTitle: String
         get() = if (!subtitle.isNullOrBlank() && subtitle != title) "$title — $subtitle" else title
@@ -125,6 +146,26 @@ data class Recording(
 data class RecordingsPage(
     val total: Int,
     val items: List<Recording>,
+)
+
+/** シリーズ番組（関連する録画のまとまり）。 */
+data class Series(
+    val id: Int,
+    val title: String,
+    val description: String,
+    val genres: List<Genre>,
+    val periods: List<SeriesPeriod>,
+) {
+    val recordingCount: Int get() = periods.sumOf { it.recordings.size }
+}
+
+/** シリーズ内の放送期間（チャンネル × 期間ごとの録画）。 */
+data class SeriesPeriod(
+    val channelName: String?,
+    val channelId: String?,
+    val startDate: String,
+    val endDate: String,
+    val recordings: List<Recording>,
 )
 
 /** 録画予約 1 件。program / channel は KonomiTV 側で解決できなかった場合に null になりうる。 */

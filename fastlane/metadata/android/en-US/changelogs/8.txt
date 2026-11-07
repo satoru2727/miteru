@@ -1,0 +1,8 @@
+- Keyword auto-reservation rules: list, add, enable/disable and delete (EDCB backend)
+- Series view for the recordings tab (related recordings grouped by series)
+- Unwatched and genre filters for the recordings list
+- A "Skip CM" button appears while playing recordings that have CM sections
+- Thumbnail preview is now shown while scrubbing the seek bar
+- Jikkyo (comment) activity badges (busy / very busy / festival) on the live channel list
+- L-shape crop (zoom) button in the player
+- New setting to show or hide subchannels

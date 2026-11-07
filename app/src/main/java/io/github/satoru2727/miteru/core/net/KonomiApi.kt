@@ -151,6 +151,56 @@ class KonomiApi(
         )
     }
 
+    // ---- キーワード自動予約条件（EDCB バックエンドのみ） ----
+
+    suspend fun reservationConditions(): ReservationConditionsDto =
+        json.decodeFromString(execute(get("api/recording/conditions")))
+
+    suspend fun addReservationCondition(body: ReservationConditionRequestDto) {
+        execute(
+            jsonRequest(
+                "api/recording/conditions",
+                "POST",
+                json.encodeToString(ReservationConditionRequestDto.serializer(), body),
+            ),
+        )
+    }
+
+    suspend fun updateReservationCondition(id: Int, body: ReservationConditionRequestDto) {
+        execute(
+            jsonRequest(
+                "api/recording/conditions/$id",
+                "PUT",
+                json.encodeToString(ReservationConditionRequestDto.serializer(), body),
+            ),
+        )
+    }
+
+    suspend fun deleteReservationCondition(id: Int) {
+        execute(request(url("api/recording/conditions/$id")).delete().build())
+    }
+
+    // ---- シリーズ番組 ----
+
+    suspend fun seriesList(page: Int = 1, order: String = "desc"): SeriesListDto =
+        json.decodeFromString(
+            execute(get("api/series", listOf("order" to order, "page" to page.toString()))),
+        )
+
+    suspend fun seriesSearch(query: String, page: Int = 1, order: String = "desc"): SeriesListDto =
+        json.decodeFromString(
+            execute(
+                get(
+                    "api/series/search",
+                    listOf("query" to query, "order" to order, "page" to page.toString()),
+                ),
+            ),
+        )
+
+    /** タイルサムネイル（シークプレビュー用のスプライト画像）。 */
+    fun tileThumbnailUrl(videoId: Int): String =
+        url("api/videos/$videoId/thumbnail/tiled").toString()
+
     suspend fun recording(videoId: Int): Recording =
         json.decodeFromString<RecordedProgramDto>(
             execute(get("api/videos/$videoId")),
@@ -179,12 +229,6 @@ class KonomiApi(
     fun videoStreamUrl(videoId: Int, quality: Quality, sessionId: String): String =
         url(
             "api/streams/video/$videoId/${quality.apiName}/playlist",
-            listOf("session_id" to sessionId),
-        ).toString()
-
-    fun videoMpegTsStreamUrl(videoId: Int, quality: Quality, sessionId: String): String =
-        url(
-            "api/streams/video/$videoId/${quality.apiName}/mpegts",
             listOf("session_id" to sessionId),
         ).toString()
 
