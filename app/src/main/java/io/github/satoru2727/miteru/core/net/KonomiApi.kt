@@ -90,6 +90,17 @@ class KonomiApi(
         ).toDomain()
     }
 
+    /** 録画 ID を指定してまとめて取得する（続きから再生用。ids は繰り返しパラメータ）。 */
+    suspend fun recordingsByIds(ids: List<Int>): RecordingsPage {
+        val params = buildList {
+            add("order" to "ids")
+            ids.forEach { add("ids" to it.toString()) }
+        }
+        return json.decodeFromString<RecordedProgramsDto>(
+            execute(get("api/videos", params)),
+        ).toDomain()
+    }
+
     suspend fun jikkyoInfo(channelId: String): JikkyoInfoDto =
         json.decodeFromString(execute(get("api/channels/$channelId/jikkyo")))
 

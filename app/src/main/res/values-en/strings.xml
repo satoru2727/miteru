@@ -88,6 +88,8 @@
     <string name="recordings_empty_hint">Programs recorded with KonomiTV appear here.</string>
     <string name="recordings_count">%1$d items</string>
     <string name="recordings_resume">Resume %1$s</string>
+    <string name="recordings_continue">Continue watching</string>
+    <string name="recordings_continue_remaining">%1$s left</string>
     <string name="recordings_no_match">No matching recordings</string>
 
     <!-- Player -->
@@ -216,6 +218,11 @@
     <string name="settings_comment_ng_hint">Comma separated</string>
     <string name="settings_comment_ng_desc">Comments containing these words are hidden (case-insensitive).</string>
     <string name="settings_comment_ng_save">Save</string>
+    <string name="settings_comment_ng_users">Muted users</string>
+    <string name="settings_comment_ng_users_empty">Not set</string>
+    <string name="settings_comment_ng_users_hint">e.g. a:zhCCWz2wZ8g_9RZQ (comma separated)</string>
+    <string name="settings_comment_ng_users_desc">User IDs to mute, comma separated. Matched by prefix; the leading "a:" may be omitted.</string>
+    <string name="settings_comment_ng_users_save">Save</string>
     <string name="comment_send_title">Send a comment</string>
     <string name="comment_send_note">Posted anonymously (184) to NX-Jikkyo</string>
     <string name="comment_send_placeholder">Write a comment (up to 75 characters)</string>

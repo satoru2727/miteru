@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -275,12 +276,14 @@ fun RecordingsScreen(vm: AppViewModel) {
                 state = state,
                 visible = visible,
                 positions = positions,
+                continueWatching = vm.continueWatching,
                 loadingMore = loadingMore,
                 capped = capped,
                 filtering = filtering,
                 listState = listState,
                 onRetry = { vm.loadRecordings() },
                 onPlay = { vm.requestPlayRecording(it) },
+                onResumePlay = { vm.requestPlayRecording(it, resumeDirectly = true) },
                 thumbnailUrl = { vm.thumbnailUrl(it) },
                 offlineById = offlineById,
                 onLongPress = { actionRecording = it },
@@ -389,12 +392,14 @@ private fun ColumnScope.RecordingsList(
     state: LoadState<List<Recording>>,
     visible: List<Recording>,
     positions: Map<Int, Long>,
+    continueWatching: List<Recording>,
     loadingMore: Boolean,
     capped: Boolean,
     filtering: Boolean,
     listState: androidx.compose.foundation.lazy.LazyListState,
     onRetry: () -> Unit,
     onPlay: (Recording) -> Unit,
+    onResumePlay: (Recording) -> Unit,
     thumbnailUrl: (Int) -> String?,
     offlineById: Map<Int, OfflineItem>,
     onLongPress: (Recording) -> Unit,
@@ -523,6 +528,20 @@ private fun ColumnScope.RecordingsList(
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                if (continueWatching.isNotEmpty() &&
+                    query.isBlank() &&
+                    filter == RecordingFilter.ALL &&
+                    !unwatchedOnly
+                ) {
+                    item(key = "continue-watching") {
+                        ContinueWatchingShelf(
+                            items = continueWatching,
+                            positions = positions,
+                            thumbnailUrl = thumbnailUrl,
+                            onPlay = onResumePlay,
+                        )
+                    }
+                }
                 items(visible, key = { it.id }) { recording ->
                     val download = offlineById[recording.id]
                     RecordingCard(
@@ -552,6 +571,89 @@ private fun ColumnScope.RecordingsList(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/** 「続きから」棚（横スクロール）。再生位置のある録画を確認なしでそのまま再開できる。 */
+@Composable
+private fun ContinueWatchingShelf(
+    items: List<Recording>,
+    positions: Map<Int, Long>,
+    thumbnailUrl: (Int) -> String?,
+    onPlay: (Recording) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.recordings_continue),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(items, key = { "cw-${it.id}" }) { recording ->
+                ContinueWatchingCard(
+                    recording = recording,
+                    resumeMs = positions[recording.id] ?: 0L,
+                    thumbnailUrl = thumbnailUrl(recording.id),
+                    onClick = { onPlay(recording) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContinueWatchingCard(
+    recording: Recording,
+    resumeMs: Long,
+    thumbnailUrl: String?,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val durationMs = recording.durationSeconds * 1000
+    val remainingMs = (durationMs - resumeMs).coerceAtLeast(0L)
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.width(210.dp),
+    ) {
+        Column {
+            AsyncImage(
+                model = ImageRequest.Builder(context.applicationContext)
+                    .data(thumbnailUrl)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f),
+            )
+            Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                Text(
+                    text = recording.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = {
+                        if (durationMs > 0) {
+                            (resumeMs.toFloat() / durationMs).coerceIn(0f, 1f)
+                        } else 0f
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp),
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.recordings_continue_remaining, formatClock(remainingMs)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

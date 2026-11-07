@@ -30,6 +30,7 @@ import io.github.satoru2727.miteru.core.util.isMeteredNetwork
 import io.github.satoru2727.miteru.data.JikkyoPostResult
 import io.github.satoru2727.miteru.data.OfflineItem
 import io.github.satoru2727.miteru.ui.player.decodeTileRegion
+import io.github.satoru2727.miteru.ui.util.dedupeComments
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -67,7 +68,7 @@ data class PendingResume(val recording: Recording, val positionMs: Long)
 
 sealed interface PendingPlay {
     data class Live(val channel: Channel) : PendingPlay
-    data class Video(val recording: Recording) : PendingPlay
+    data class Video(val recording: Recording, val resumeDirectly: Boolean = false) : PendingPlay
 }
 
 class AppViewModel(private val container: AppContainer) : ViewModel() {
@@ -176,6 +177,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         private set
     var resumePositions by mutableStateOf<Map<Int, Long>>(emptyMap())
         private set
+
+    /** 視聴途中の録画（「続きから」棚に表示する）。 */
+    var continueWatching by mutableStateOf<List<Recording>>(emptyList())
+        private set
     var pendingResume by mutableStateOf<PendingResume?>(null)
         private set
     var pendingMeteredPlay by mutableStateOf<PendingPlay?>(null)
@@ -190,6 +195,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     init {
         viewModelScope.launch {
+            settingsStore.ensureLegacyMigrated()
             // 設定が「未設定 → 設定済み」に変わった時に読み込みを開始する。
             // 旧実装の `filterNotNull().first()` は初期の未設定値を掴んで終わるため、
             // 初回セットアップ後に一切ロードが走らない（ライブが 0 channels のまま）不具合があった。
@@ -214,6 +220,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         loadRecordPresets()
         loadChannels()
         loadRecordings(refresh = true)
+        loadContinueWatching()
         viewModelScope.launch { resumePositions = settingsStore.positions() }
     }
 
@@ -228,6 +235,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
             Tab.RESERVATIONS -> if (reservationsState is LoadState.Idle) loadReservations()
             Tab.RECORDINGS -> {
                 if (recordingsState is LoadState.Idle) loadRecordings()
+                loadContinueWatching()
                 viewModelScope.launch { resumePositions = settingsStore.positions() }
             }
             else -> Unit
@@ -484,6 +492,24 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /** 「続きから」棚を更新する（途中まで見た録画だけをまとめて取得）。 */
+    fun loadContinueWatching() {
+        viewModelScope.launch {
+            val positions = settingsStore.positions()
+            val ids = continueWatchingIds(positions)
+            continueWatching = if (ids.isEmpty()) {
+                emptyList()
+            } else {
+                repository.loadRecordingsByIds(ids).filter { recording ->
+                    // 終盤まで見たものは出さない（見終わった扱い）
+                    val resume = positions[recording.id] ?: 0L
+                    val durationMs = recording.durationSeconds * 1000
+                    resume < durationMs - 30_000L
+                }
+            }
+        }
+    }
+
     fun loadMoreRecordings() {
         val loaded = (recordingsState as? LoadState.Success)?.value ?: return
         if (loadingMore || loaded.size >= recordingsTotal) return
@@ -571,11 +597,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun requestPlayRecording(recording: Recording) {
+    fun requestPlayRecording(recording: Recording, resumeDirectly: Boolean = false) {
         if (currentSettings.warnOnMobileData && isMeteredNetwork(container.appContext)) {
-            pendingMeteredPlay = PendingPlay.Video(recording)
+            pendingMeteredPlay = PendingPlay.Video(recording, resumeDirectly)
         } else {
-            openRecording(recording)
+            openRecording(recording, resumeDirectly)
         }
     }
 
@@ -584,7 +610,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         pendingMeteredPlay = null
         when (pending) {
             is PendingPlay.Live -> playChannel(pending.channel)
-            is PendingPlay.Video -> openRecording(pending.recording)
+            is PendingPlay.Video -> openRecording(pending.recording, pending.resumeDirectly)
         }
     }
 
@@ -606,14 +632,19 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun openRecording(recording: Recording) {
+    fun openRecording(recording: Recording, resumeDirectly: Boolean = false) {
         viewModelScope.launch {
             val resume = if (currentSettings.resumePlayback) {
                 settingsStore.positionFor(recording.id)
             } else 0L
             val durationMs = recording.durationSeconds * 1000
             if (resume > 10_000L && resume < durationMs - 30_000L) {
-                pendingResume = PendingResume(recording, resume)
+                if (resumeDirectly) {
+                    // 「続きから」棚からは確認なしでそのまま再開する
+                    startRecording(recording, resume)
+                } else {
+                    pendingResume = PendingResume(recording, resume)
+                }
             } else {
                 startRecording(recording, 0L)
             }
@@ -727,6 +758,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         showPlayer = false
         playback.playerVisible = false
         viewModelScope.launch { resumePositions = settingsStore.positions() }
+        loadContinueWatching()
     }
 
     fun closePlayer() {
@@ -783,6 +815,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { settingsStore.setCommentNgWords(words) }
     }
 
+    fun setCommentNgUsers(users: String) {
+        viewModelScope.launch { settingsStore.setCommentNgUsers(users) }
+    }
+
     fun setShowSubchannels(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setShowSubchannels(enabled) }
     }
@@ -802,8 +838,25 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         return words.any { lower.contains(it.lowercase()) }
     }
 
+    /** NG ユーザー（前方一致、"a:" は省略可）のコメントを落とす。 */
+    private fun mutedUser(userId: String?): Boolean {
+        if (userId.isNullOrBlank()) return false
+        val tokens = settings.value?.commentNgUsers.orEmpty()
+            .split(',', ' ', '　')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        if (tokens.isEmpty()) return false
+        return tokens.any { token ->
+            userId.equals(token, ignoreCase = true) ||
+                userId.startsWith(token) ||
+                userId.equals("a:$token", ignoreCase = true)
+        }
+    }
+
     private fun mutedFlow(source: Flow<JikkyoComment>): Flow<JikkyoComment> =
-        source.filter { !muted(it.text) }
+        source
+            .filter { !muted(it.text) && !mutedUser(it.userId) }
+            .dedupeComments()
 
     fun setShowComments(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setShowComments(enabled) }
@@ -998,3 +1051,21 @@ sealed interface CommentPostState {
     data object Posted : CommentPostState
     data class Failed(val message: String) : CommentPostState
 }
+
+/**
+ * 「続きから」棚に出す録画 ID を選ぶ。
+ *
+ * 「視聴済み」フラグは 30 秒再生すると立つ（未視聴フィルタ用）ため、
+ * 棚の条件に使ってはいけない — 途中まで見た録画が全部消える。
+ * ここでは「30 秒以上再生した」位置があるものだけを対象にし、見終わった
+ * ものの除外は呼び出し側が duration と突き合わせて行う。
+ */
+internal fun continueWatchingIds(
+    positions: Map<Int, Long>,
+    minPositionMs: Long = 30_000L,
+    limit: Int = 20,
+): List<Int> = positions
+    .filterValues { it >= minPositionMs }
+    .keys
+    .sortedDescending()
+    .take(limit)

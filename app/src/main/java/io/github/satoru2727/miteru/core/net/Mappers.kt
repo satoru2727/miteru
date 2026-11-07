@@ -76,6 +76,7 @@ fun JikkyoCommentDto.toDomain(): JikkyoComment = JikkyoComment(
     size = size,
     color = if (color.startsWith("#")) color else jikkyoColors[color] ?: "#FFFFFF",
     timeSeconds = time,
+    userId = author.takeIf { it.isNotBlank() },
 )
 
 fun ReservationsDto.toDomain(): ReservationsPage = ReservationsPage(

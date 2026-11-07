@@ -200,6 +200,8 @@ data class JikkyoComment(
     val size: String,
     val color: String,
     val timeSeconds: Double,
+    /** NX-Jikkyo / ニコニコのユーザー ID（例 "a:xxxx"。匿名でも付くことが多い）。 */
+    val userId: String? = null,
 )
 
 data class ReservationsPage(

@@ -95,6 +95,8 @@ fun SettingsScreen(
     var showAddServer by remember { mutableStateOf(false) }
     var ngDialog by remember { mutableStateOf(false) }
     var ngText by remember { mutableStateOf(current.commentNgWords) }
+    var ngUsersDialog by remember { mutableStateOf(false) }
+    var ngUsersText by remember { mutableStateOf(current.commentNgUsers) }
     val uriHandler = LocalUriHandler.current
 
     Column(
@@ -271,6 +273,18 @@ fun SettingsScreen(
                     onClick = {
                         ngText = current.commentNgWords
                         ngDialog = true
+                    },
+                    trailing = {
+                        Icon(Icons.Rounded.ChevronRight, contentDescription = null)
+                    },
+                )
+                Spacer(Modifier.height(14.dp))
+                SettingRow(
+                    title = stringResource(R.string.settings_comment_ng_users),
+                    subtitle = current.commentNgUsers.ifBlank { stringResource(R.string.settings_comment_ng_users_empty) },
+                    onClick = {
+                        ngUsersText = current.commentNgUsers
+                        ngUsersDialog = true
                     },
                     trailing = {
                         Icon(Icons.Rounded.ChevronRight, contentDescription = null)
@@ -473,6 +487,43 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { ngDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    if (ngUsersDialog) {
+        AlertDialog(
+            onDismissRequest = { ngUsersDialog = false },
+            title = { Text(stringResource(R.string.settings_comment_ng_users)) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = ngUsersText,
+                        onValueChange = { ngUsersText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text(stringResource(R.string.settings_comment_ng_users_hint)) },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.settings_comment_ng_users_desc),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.setCommentNgUsers(ngUsersText)
+                    ngUsersDialog = false
+                }) {
+                    Text(stringResource(R.string.settings_comment_ng_users_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { ngUsersDialog = false }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             },

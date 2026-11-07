@@ -142,7 +142,9 @@ class JikkyoRepository(
                         if (content.isBlank()) return
                         val mail = chat["mail"]?.jsonPrimitive?.contentOrNull.orEmpty()
                         val (type, size, color) = parseMail(mail)
-                        trySend(JikkyoComment(content, type, size, color, 0.0))
+                        val userId = chat["user_id"]?.jsonPrimitive?.contentOrNull
+                            ?: chat["hashed_user_id"]?.jsonPrimitive?.contentOrNull
+                        trySend(JikkyoComment(content, type, size, color, 0.0, userId))
                     }
                 },
             )

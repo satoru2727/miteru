@@ -129,6 +129,13 @@ class KonomiRepository(
         return runCatching { api.recordings(page, order, query) }
     }
 
+    /** 続きから再生用: 指定した ID の録画だけをまとめて取得する。 */
+    suspend fun loadRecordingsByIds(ids: List<Int>): List<Recording> {
+        if (ids.isEmpty()) return emptyList()
+        val api = api() ?: return emptyList()
+        return runCatching { api.recordingsByIds(ids).items }.getOrDefault(emptyList())
+    }
+
     suspend fun loadReservations(): Result<ReservationsPage> {
         val api = api() ?: return Result.failure(IllegalStateException("server not configured"))
         return runCatching { api.reservations() }

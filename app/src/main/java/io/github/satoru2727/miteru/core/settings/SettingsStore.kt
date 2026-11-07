@@ -1,6 +1,7 @@
 package io.github.satoru2727.miteru.core.settings
 
 import android.content.Context
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
@@ -16,6 +17,17 @@ import kotlinx.coroutines.sync.withLock
 
 private val Context.miteruDataStore by preferencesDataStore(name = "miteru_settings")
 
+/**
+ * サーバー URL から設定スコープを作る（12 桁 hex）。
+ * 視聴位置・視聴済みフラグをサーバーごとに分離するためにキーの接尾辞として使う。
+ */
+internal fun serverScope(url: String?): String? {
+    val normalized = url?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() } ?: return null
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+        .digest(normalized.toByteArray(Charsets.UTF_8))
+    return digest.take(6).joinToString("") { "%02x".format(it) }
+}
+
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 
 data class Settings(
@@ -30,6 +42,7 @@ data class Settings(
     val commentAlpha: Float = 1f,
     val commentSpeed: String = "normal",
     val commentNgWords: String = "",
+    val commentNgUsers: String = "",
     val showSubchannels: Boolean = true,
     val autoSkipCm: Boolean = false,
     val watchedVideoIds: Set<Int> = emptySet(),
@@ -61,6 +74,7 @@ class SettingsStore(private val context: Context) {
         val COMMENT_ALPHA = floatPreferencesKey("comment_alpha")
         val COMMENT_SPEED = stringPreferencesKey("comment_speed")
         val COMMENT_NG = stringPreferencesKey("comment_ng_words")
+        val COMMENT_NG_USERS = stringPreferencesKey("comment_ng_users")
         val SHOW_SUBCHANNELS = booleanPreferencesKey("show_subchannels")
         val AUTO_SKIP_CM = booleanPreferencesKey("auto_skip_cm")
         val WATCHED_IDS = stringPreferencesKey("watched_video_ids")
@@ -69,9 +83,64 @@ class SettingsStore(private val context: Context) {
         val CHANNELS_AT = longPreferencesKey("channels_cache_at")
         val POSITIONS = stringPreferencesKey("resume_positions")
         val PLAYBACK_ACTIVE = booleanPreferencesKey("playback_active")
+
+        /** 旧キー（サーバー分離前）の移行が完了したスコープを記録する。 */
+        val LEGACY_MARKER = stringPreferencesKey("legacy_scope_migrated")
+    }
+
+    private fun watchedKeyFor(scope: String?) =
+        if (scope == null) Keys.WATCHED_IDS else stringPreferencesKey("watched_video_ids@$scope")
+
+    private fun positionsKeyFor(scope: String?) =
+        if (scope == null) Keys.POSITIONS else stringPreferencesKey("resume_positions@$scope")
+
+    /** スコープ済みキーを優先し、未移行のときだけ旧キーにフォールバックする。 */
+    private fun effective(
+        prefs: Preferences,
+        scope: String?,
+        scopedKey: Preferences.Key<String>,
+        legacyKey: Preferences.Key<String>,
+    ): String? {
+        if (scope == null) return prefs[legacyKey]
+        return prefs[scopedKey] ?: if (prefs[Keys.LEGACY_MARKER] != scope) prefs[legacyKey] else null
+    }
+
+    private data class Scoped(val scope: String?, val watched: String?, val positions: String?)
+
+    private suspend fun readScoped(): Scoped {
+        val prefs = context.miteruDataStore.data.first()
+        val scope = serverScope(prefs[Keys.SERVER_URL])
+        return Scoped(
+            scope = scope,
+            watched = effective(prefs, scope, watchedKeyFor(scope), Keys.WATCHED_IDS),
+            positions = effective(prefs, scope, positionsKeyFor(scope), Keys.POSITIONS),
+        )
+    }
+
+    /** 旧キーのデータを現在のサーバーのスコープへ一度だけ移行する。アプリ起動直後に呼ぶ。 */
+    suspend fun ensureLegacyMigrated() {
+        writeMutex.withLock { migrateLocked() }
+    }
+
+    private suspend fun migrateLocked() {
+        val prefs = context.miteruDataStore.data.first()
+        val scope = serverScope(prefs[Keys.SERVER_URL]) ?: return
+        if (prefs[Keys.LEGACY_MARKER] == scope) return
+        val legacyWatched = prefs[Keys.WATCHED_IDS]
+        val legacyPositions = prefs[Keys.POSITIONS]
+        context.miteruDataStore.edit { p ->
+            val wKey = watchedKeyFor(scope)
+            val pKey = positionsKeyFor(scope)
+            if (legacyWatched != null && p[wKey] == null) p[wKey] = legacyWatched
+            if (legacyPositions != null && p[pKey] == null) p[pKey] = legacyPositions
+            p.remove(Keys.WATCHED_IDS)
+            p.remove(Keys.POSITIONS)
+            p[Keys.LEGACY_MARKER] = scope
+        }
     }
 
     val settings: Flow<Settings> = context.miteruDataStore.data.map { prefs ->
+        val scope = serverScope(prefs[Keys.SERVER_URL])
         Settings(
             serverUrl = prefs[Keys.SERVER_URL],
             themeMode = runCatching {
@@ -86,9 +155,12 @@ class SettingsStore(private val context: Context) {
             commentAlpha = prefs[Keys.COMMENT_ALPHA] ?: 1f,
             commentSpeed = prefs[Keys.COMMENT_SPEED] ?: "normal",
             commentNgWords = prefs[Keys.COMMENT_NG] ?: "",
+            commentNgUsers = prefs[Keys.COMMENT_NG_USERS] ?: "",
             showSubchannels = prefs[Keys.SHOW_SUBCHANNELS] ?: true,
             autoSkipCm = prefs[Keys.AUTO_SKIP_CM] ?: false,
-            watchedVideoIds = decodeIdSet(prefs[Keys.WATCHED_IDS]),
+            watchedVideoIds = decodeIdSet(
+                effective(prefs, scope, watchedKeyFor(scope), Keys.WATCHED_IDS),
+            ),
             servers = decodeServers(prefs[Keys.SERVERS]),
             cachedChannelsAt = prefs[Keys.CHANNELS_AT] ?: 0L,
             playbackActive = prefs[Keys.PLAYBACK_ACTIVE] ?: false,
@@ -143,6 +215,10 @@ class SettingsStore(private val context: Context) {
         context.miteruDataStore.edit { it[Keys.COMMENT_NG] = words }
     }
 
+    suspend fun setCommentNgUsers(users: String) {
+        context.miteruDataStore.edit { it[Keys.COMMENT_NG_USERS] = users }
+    }
+
     suspend fun setShowSubchannels(enabled: Boolean) {
         context.miteruDataStore.edit { it[Keys.SHOW_SUBCHANNELS] = enabled }
     }
@@ -156,15 +232,18 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun watchedIds(): Set<Int> =
-        decodeIdSet(context.miteruDataStore.data.first()[Keys.WATCHED_IDS])
+        decodeIdSet(readScoped().watched)
 
     /** 録画を視聴済みとして記録する（未視聴フィルタ用）。 */
     suspend fun markWatched(videoId: Int) {
         writeMutex.withLock {
-            val current = watchedIds().toMutableSet()
+            migrateLocked()
+            val snap = readScoped()
+            val current = decodeIdSet(snap.watched).toMutableSet()
             if (current.add(videoId)) {
                 val encoded = encodeIdSet(current)
-                context.miteruDataStore.edit { prefs -> prefs[Keys.WATCHED_IDS] = encoded }
+                val key = watchedKeyFor(snap.scope)
+                context.miteruDataStore.edit { prefs -> prefs[key] = encoded }
             }
         }
     }
@@ -172,11 +251,14 @@ class SettingsStore(private val context: Context) {
     /** 視聴済みマークを取り消す。 */
     suspend fun unmarkWatched(videoId: Int) {
         writeMutex.withLock {
-            val current = watchedIds().toMutableSet()
+            migrateLocked()
+            val snap = readScoped()
+            val current = decodeIdSet(snap.watched).toMutableSet()
             if (current.remove(videoId)) {
                 val encoded = encodeIdSet(current)
+                val key = watchedKeyFor(snap.scope)
                 context.miteruDataStore.edit { prefs ->
-                    if (encoded.isBlank()) prefs.remove(Keys.WATCHED_IDS) else prefs[Keys.WATCHED_IDS] = encoded
+                    if (encoded.isBlank()) prefs.remove(key) else prefs[key] = encoded
                 }
             }
         }
@@ -206,41 +288,48 @@ class SettingsStore(private val context: Context) {
         }
     }
 
-    suspend fun positions(): Map<Int, Long> {
-        val raw = context.miteruDataStore.data.first()[Keys.POSITIONS].orEmpty()
-        if (raw.isBlank()) return emptyMap()
-        return raw.split(';').mapNotNull { entry ->
-            val parts = entry.split(':')
-            if (parts.size != 2) return@mapNotNull null
-            val id = parts[0].toIntOrNull() ?: return@mapNotNull null
-            val position = parts[1].toLongOrNull() ?: return@mapNotNull null
-            id to position
-        }.toMap()
-    }
+    suspend fun positions(): Map<Int, Long> = parsePositions(readScoped().positions)
 
     suspend fun positionFor(videoId: Int): Long = positions()[videoId] ?: 0L
 
     suspend fun savePosition(videoId: Int, positionMs: Long) {
         writeMutex.withLock {
-            val current = positions().toMutableMap()
+            migrateLocked()
+            val snap = readScoped()
+            val current = parsePositions(snap.positions).toMutableMap()
             if (positionMs <= 0L) current.remove(videoId) else current[videoId] = positionMs
             val encoded = current.entries.joinToString(";") { "${it.key}:${it.value}" }
+            val key = positionsKeyFor(snap.scope)
             context.miteruDataStore.edit { prefs ->
-                if (encoded.isBlank()) prefs.remove(Keys.POSITIONS) else prefs[Keys.POSITIONS] = encoded
+                if (encoded.isBlank()) prefs.remove(key) else prefs[key] = encoded
             }
         }
     }
 
     suspend fun clearPosition(videoId: Int) {
         writeMutex.withLock {
-            val current = positions().toMutableMap()
+            migrateLocked()
+            val snap = readScoped()
+            val current = parsePositions(snap.positions).toMutableMap()
             current.remove(videoId)
             val encoded = current.entries.joinToString(";") { "${it.key}:${it.value}" }
+            val key = positionsKeyFor(snap.scope)
             context.miteruDataStore.edit { prefs ->
-                if (encoded.isBlank()) prefs.remove(Keys.POSITIONS) else prefs[Keys.POSITIONS] = encoded
+                if (encoded.isBlank()) prefs.remove(key) else prefs[key] = encoded
             }
         }
     }
+}
+
+private fun parsePositions(raw: String?): Map<Int, Long> {
+    if (raw.isNullOrBlank()) return emptyMap()
+    return raw.split(';').mapNotNull { entry ->
+        val parts = entry.split(':')
+        if (parts.size != 2) return@mapNotNull null
+        val id = parts[0].toIntOrNull() ?: return@mapNotNull null
+        val position = parts[1].toLongOrNull() ?: return@mapNotNull null
+        id to position
+    }.toMap()
 }
 
 private fun decodeIdSet(raw: String?): Set<Int> =

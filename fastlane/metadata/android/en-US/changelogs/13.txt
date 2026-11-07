@@ -1,0 +1,4 @@
+- Continue watching: unfinished recordings now appear at the top of the Recordings tab and resume with one tap
+- New muted-users setting for comments (prefix match, leading "a:" optional)
+- Repeated identical comments (bullet spam) are now suppressed automatically
+- Resume positions and watched state are now stored per server (multi-server setups)

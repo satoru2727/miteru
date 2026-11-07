@@ -88,6 +88,8 @@
     <string name="recordings_empty_hint">KonomiTV で録画した番組がここに表示されます。</string>
     <string name="recordings_count">%1$d 件</string>
     <string name="recordings_resume">続きから %1$s</string>
+    <string name="recordings_continue">続きから</string>
+    <string name="recordings_continue_remaining">残り %1$s</string>
     <string name="recordings_no_match">一致する録画がありません</string>
 
     <!-- Player -->
@@ -216,6 +218,11 @@
     <string name="settings_comment_ng_hint">カンマ区切りで入力</string>
     <string name="settings_comment_ng_desc">一致するコメントを表示しません（大文字小文字は区別しません）。</string>
     <string name="settings_comment_ng_save">保存</string>
+    <string name="settings_comment_ng_users">NG ユーザー</string>
+    <string name="settings_comment_ng_users_empty">未設定</string>
+    <string name="settings_comment_ng_users_hint">例: a:zhCCWz2wZ8g_9RZQ（カンマ区切り）</string>
+    <string name="settings_comment_ng_users_desc">ミュートしたいユーザー ID をカンマ区切りで入力します。前方一致で判定し、先頭の「a:」は省略できます。</string>
+    <string name="settings_comment_ng_users_save">保存</string>
     <string name="comment_send_title">コメントを送信</string>
     <string name="comment_send_note">NX-Jikkyo に匿名（184）で投稿します</string>
     <string name="comment_send_placeholder">コメントを入力（75文字まで）</string>

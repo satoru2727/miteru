@@ -164,6 +164,26 @@ def main():
         out = sh("install", "-r", params.apk)
         check("install APK", "Success" in out, out.strip()[-60:])
 
+    # 1.2 エミュレータの「System UI isn't responding」ダイアログを閉じる
+    #     （開いていると以降のタップが全部飲み込まれる）
+    for _ in range(3):
+        xml = dump()
+        if xml and "responding" not in xml and "応答していません" not in xml:
+            break
+        b = find_bounds(xml, "Wait") or find_bounds(xml, "待機")
+        if b:
+            print("       dismissing system UI ANR dialog (Wait)")
+            tap(*b)
+            time.sleep(4)
+        else:
+            b = find_bounds(xml, "Close app") or find_bounds(xml, "アプリを閉じる")
+            if b:
+                print("       dismissing system UI ANR dialog (Close app)")
+                tap(*b)
+                time.sleep(8)
+            else:
+                break
+
     # 1.5 定常状態から始める: 対象アプリを前面で再起動（debug パッケージは止める）
     if not params.fresh:
         sh("shell", "am", "force-stop", "io.github.satoru2727.miteru.debug")
