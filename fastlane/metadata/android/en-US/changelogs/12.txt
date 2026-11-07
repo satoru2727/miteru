@@ -1,0 +1,4 @@
+- Fixed live TV not playing at all
+  - Cause: the live playback setup (setting the media item and starting playback) had been dropped by mistake, so selecting a channel never started the video
+- Fixed the channel list not loading right after first-time setup (previously needed a manual refresh)
+- Also fixes the follow-on issue where the player controller was left disconnected, breaking further playback until the app restarted

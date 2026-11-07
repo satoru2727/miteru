@@ -231,7 +231,11 @@ class PlaybackLauncher(
         _playerState.value = PlayerUiState()
         mediaController.clearMediaItems()
         mediaController.stop()
-        mediaController.release()
+        // v1.3.3 の書き換えで誤って setMediaItem/prepare/play が release() に置き換わり、
+        // ライブが再生できなくなっていた（release はコントローラを切断してしまう）
+        mediaController.setMediaItem(item)
+        mediaController.prepare()
+        mediaController.play()
         fallbackStreams = emptyList()
         fallbackIndex = 0
         fallbackRecording = null

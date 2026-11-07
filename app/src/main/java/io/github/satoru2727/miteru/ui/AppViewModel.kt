@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -189,12 +190,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            val loaded = settings.filterNotNull().first()
-            if (loaded.isConfigured) {
-                refreshAll()
-                if (loaded.playbackActive) {
-                    viewModelScope.launch { playback.restoreIfPlaying() }
+            // 設定が「未設定 → 設定済み」に変わった時に読み込みを開始する。
+            // 旧実装の `filterNotNull().first()` は初期の未設定値を掴んで終わるため、
+            // 初回セットアップ後に一切ロードが走らない（ライブが 0 channels のまま）不具合があった。
+            var wasConfigured = false
+            settings.filterNotNull().collect { loaded ->
+                if (loaded.isConfigured && !wasConfigured) {
+                    refreshAll()
+                    if (loaded.playbackActive) {
+                        viewModelScope.launch { playback.restoreIfPlaying() }
+                    }
                 }
+                wasConfigured = loaded.isConfigured
             }
         }
         viewModelScope.launch {
@@ -213,6 +220,7 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     fun selectTab(next: Tab) {
         tab = next
         when (next) {
+            Tab.LIVE -> if (channelsState is LoadState.Idle) loadChannels()
             Tab.GUIDE -> {
                 if (guideState is LoadState.Idle) loadGuide()
                 loadRecordPresets()
