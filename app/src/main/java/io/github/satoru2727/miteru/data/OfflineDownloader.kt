@@ -108,6 +108,41 @@ class OfflineDownloader(
         }
     }
 
+    /** ダウンロードを一時停止する（保存済みセグメントは保持し、再開時に引き継ぐ）。 */
+    fun pause(videoId: Int) {
+        scope.launch {
+            if (activeVideoId == videoId) {
+                worker?.cancel()
+                worker = null
+            }
+            store.update(videoId) {
+                it.copy(status = OfflineStatus.PAUSED, updatedAt = System.currentTimeMillis())
+            }
+            ensureWorker()
+        }
+    }
+
+    /** 一時停止したダウンロードを再開する。 */
+    fun resume(videoId: Int) {
+        scope.launch {
+            store.update(videoId) {
+                it.copy(status = OfflineStatus.QUEUED, error = null, updatedAt = System.currentTimeMillis())
+            }
+            startService()
+            ensureWorker()
+        }
+    }
+
+    /** 保存済み・進行中のダウンロードをすべて削除する。 */
+    fun clearAll() {
+        scope.launch {
+            worker?.cancel()
+            worker = null
+            store.snapshot().forEach { deleteFiles(it.videoId) }
+            store.clear()
+        }
+    }
+
     /** 完了済み（または失敗済み）のダウンロードを削除する。 */
     fun delete(videoId: Int) {
         scope.launch {
@@ -166,12 +201,16 @@ class OfflineDownloader(
                 throw e
             } catch (e: Exception) {
                 MiteruLog.w("Offline", "download failed video=${next.videoId}: ${e.message}")
-                store.update(next.videoId) {
-                    it.copy(
-                        status = OfflineStatus.FAILED,
-                        error = e.message ?: "download failed",
-                        updatedAt = System.currentTimeMillis(),
-                    )
+                // 一時停止などで状態が変わっている場合は FAILED にしない
+                val current = store.snapshot().firstOrNull { it.videoId == next.videoId }
+                if (current?.status == OfflineStatus.DOWNLOADING) {
+                    store.update(next.videoId) {
+                        it.copy(
+                            status = OfflineStatus.FAILED,
+                            error = e.message ?: "download failed",
+                            updatedAt = System.currentTimeMillis(),
+                        )
+                    }
                 }
             }
         }
@@ -195,11 +234,25 @@ class OfflineDownloader(
         val (localPlaylist, _) = rewriteLocalPlaylist(playlist)
 
         val dir = dirFor(item.videoId)
-        dir.deleteRecursively()
         dir.mkdirs()
 
+        // 一時停止から再開した場合はダウンロード済みのセグメントを引き継ぐ
+        var done = 0
+        var bytes = 0L
+        segmentUris.indices.forEach { index ->
+            val file = File(dir, segmentFileName(index))
+            if (file.exists() && file.length() > 0L) {
+                done += 1
+                bytes += file.length()
+            }
+        }
         store.update(item.videoId) {
-            it.copy(segmentsTotal = segmentUris.size, segmentsDone = 0, bytes = 0, updatedAt = System.currentTimeMillis())
+            it.copy(
+                segmentsTotal = segmentUris.size,
+                segmentsDone = done,
+                bytes = bytes,
+                updatedAt = System.currentTimeMillis(),
+            )
         }
 
         // プレイヤーと同じく、セグメント生成が止まらないよう keep-alive を打ち続ける
@@ -211,12 +264,11 @@ class OfflineDownloader(
         }
 
         try {
-            var done = 0
-            var bytes = 0L
             var lastReport = 0L
             segmentUris.forEachIndexed { index, uri ->
-                val url = playlistUrl.resolve(uri) ?: throw IOException("bad segment uri: $uri")
                 val target = File(dir, segmentFileName(index))
+                if (target.exists() && target.length() > 0L) return@forEachIndexed
+                val url = playlistUrl.resolve(uri) ?: throw IOException("bad segment uri: $uri")
                 downloadToFile(url.toString(), target)
                 bytes += target.length()
                 done += 1

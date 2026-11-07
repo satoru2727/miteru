@@ -668,6 +668,12 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun cancelDownload(videoId: Int) = container.offline.cancel(videoId)
 
+    fun pauseDownload(videoId: Int) = container.offline.pause(videoId)
+
+    fun resumeDownload(videoId: Int) = container.offline.resume(videoId)
+
+    fun clearAllDownloads() = container.offline.clearAll()
+
     fun deleteDownload(videoId: Int) = container.offline.delete(videoId)
 
     fun retryDownload(videoId: Int) = container.offline.retry(videoId)

@@ -18,7 +18,7 @@ private val Context.offlineDataStore by preferencesDataStore(name = "miteru_offl
 
 /** オフライン保存の状態。 */
 @Serializable
-enum class OfflineStatus { QUEUED, DOWNLOADING, COMPLETED, FAILED }
+enum class OfflineStatus { QUEUED, DOWNLOADING, COMPLETED, FAILED, PAUSED }
 
 /** オフライン保存された録画 1 件（またはダウンロード中の項目）。 */
 @Serializable
@@ -82,6 +82,10 @@ class OfflineStore(private val context: Context, private val json: Json) {
         writeMutex.withLock {
             save(snapshot().filterNot { it.videoId == videoId })
         }
+    }
+
+    suspend fun clear() {
+        writeMutex.withLock { save(emptyList()) }
     }
 
     private fun decode(raw: String?): List<OfflineItem> {

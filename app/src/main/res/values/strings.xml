@@ -99,6 +99,17 @@
     <string name="player_pip">ピクチャーインピクチャー</string>
     <string name="player_crop">L字カット</string>
     <string name="player_cm_skip">CM をスキップ・残り %1$d 秒</string>
+    <string name="player_menu">メニュー</string>
+    <string name="player_comments_pause">コメントを一時停止</string>
+    <string name="player_comments_resume">コメントを再開</string>
+    <string name="player_capture">スクリーンショット</string>
+    <string name="player_capture_saved">ギャラリーに保存しました</string>
+    <string name="player_capture_failed">保存できませんでした</string>
+    <string name="offline_paused">一時停止中</string>
+    <string name="offline_pause">一時停止</string>
+    <string name="offline_resume">再開</string>
+    <string name="offline_clear_all">すべて削除</string>
+    <string name="offline_clear_all_title">保存済みの録画をすべて削除しますか？</string>
     <string name="live_force_many">多</string>
     <string name="live_force_so_many">激多</string>
     <string name="live_force_festival">祭</string>

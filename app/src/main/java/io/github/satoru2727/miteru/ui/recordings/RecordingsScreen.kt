@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.AlertDialog
@@ -118,6 +119,7 @@ fun RecordingsScreen(vm: AppViewModel) {
     var selectedSeries by remember { mutableStateOf<Series?>(null) }
     var actionRecording by remember { mutableStateOf<Recording?>(null) }
     var pendingOfflineDelete by remember { mutableStateOf<OfflineItem?>(null) }
+    var pendingClearAll by remember { mutableStateOf(false) }
 
     val all = (state as? LoadState.Success)?.value.orEmpty()
     val filtering = unwatchedOnly || genreFilter != null
@@ -299,8 +301,11 @@ fun RecordingsScreen(vm: AppViewModel) {
                 items = offlineItems,
                 onPlay = vm::playOfflineItem,
                 onCancel = vm::cancelDownload,
+                onPause = vm::pauseDownload,
+                onResume = vm::resumeDownload,
                 onDelete = { pendingOfflineDelete = it },
                 onRetry = vm::retryDownload,
+                onClearAll = { pendingClearAll = true },
             )
         }
     }
@@ -316,6 +321,8 @@ fun RecordingsScreen(vm: AppViewModel) {
                 actionRecording = null
             },
             onCancelDownload = { vm.cancelDownload(recording.id) },
+            onPauseDownload = { vm.pauseDownload(recording.id) },
+            onResumeDownload = { vm.resumeDownload(recording.id) },
             onDeleteDownload = { vm.deleteDownload(recording.id) },
             onPlayOffline = {
                 offlineById[recording.id]?.let(vm::playOfflineItem)
@@ -339,6 +346,26 @@ fun RecordingsScreen(vm: AppViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { pendingOfflineDelete = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    if (pendingClearAll) {
+        AlertDialog(
+            onDismissRequest = { pendingClearAll = false },
+            title = { Text(stringResource(R.string.offline_clear_all_title)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingClearAll = false
+                    vm.clearAllDownloads()
+                }) {
+                    Text(stringResource(R.string.offline_clear_all), color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingClearAll = false }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             },
@@ -919,6 +946,8 @@ private fun RecordingActionSheet(
     onDismiss: () -> Unit,
     onDownload: (Quality) -> Unit,
     onCancelDownload: () -> Unit,
+    onPauseDownload: () -> Unit,
+    onResumeDownload: () -> Unit,
     onDeleteDownload: () -> Unit,
     onPlayOffline: () -> Unit,
 ) {
@@ -954,22 +983,39 @@ private fun RecordingActionSheet(
             Spacer(Modifier.height(16.dp))
 
             when (offlineItem?.status) {
-                OfflineStatus.QUEUED, OfflineStatus.DOWNLOADING -> {
+                OfflineStatus.QUEUED, OfflineStatus.DOWNLOADING, OfflineStatus.PAUSED -> {
                     val item = offlineItem
                     Text(
-                        text = stringResource(
-                            R.string.offline_downloading,
-                            (item.progress * 100).toInt(),
-                            item.segmentsDone,
-                            item.segmentsTotal,
-                        ),
+                        text = if (item.status == OfflineStatus.PAUSED) {
+                            stringResource(R.string.offline_paused)
+                        } else {
+                            stringResource(
+                                R.string.offline_downloading,
+                                (item.progress * 100).toInt(),
+                                item.segmentsDone,
+                                item.segmentsTotal,
+                            )
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(progress = { item.progress }, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(12.dp))
-                    TextButton(onClick = onCancelDownload) {
-                        Text(stringResource(R.string.offline_cancel))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        when (item.status) {
+                            OfflineStatus.DOWNLOADING -> TextButton(onClick = onPauseDownload) {
+                                Text(stringResource(R.string.offline_pause))
+                            }
+
+                            OfflineStatus.PAUSED -> TextButton(onClick = onResumeDownload) {
+                                Text(stringResource(R.string.offline_resume))
+                            }
+
+                            else -> Unit
+                        }
+                        TextButton(onClick = onCancelDownload) {
+                            Text(stringResource(R.string.offline_cancel))
+                        }
                     }
                 }
 
@@ -1039,8 +1085,11 @@ private fun ColumnScope.OfflineList(
     items: List<OfflineItem>,
     onPlay: (OfflineItem) -> Unit,
     onCancel: (Int) -> Unit,
+    onPause: (Int) -> Unit,
+    onResume: (Int) -> Unit,
     onDelete: (OfflineItem) -> Unit,
     onRetry: (Int) -> Unit,
+    onClearAll: () -> Unit,
 ) {
     if (items.isEmpty()) {
         EmptyState(
@@ -1062,17 +1111,27 @@ private fun ColumnScope.OfflineList(
                 item = item,
                 onPlay = { onPlay(item) },
                 onCancel = { onCancel(item.videoId) },
+                onPause = { onPause(item.videoId) },
+                onResume = { onResume(item.videoId) },
                 onDelete = { onDelete(item) },
                 onRetry = { onRetry(item.videoId) },
             )
         }
         item {
-            Text(
-                text = stringResource(R.string.offline_total, items.size, formatFileSize(totalBytes)),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
-            )
+            ) {
+                Text(
+                    text = stringResource(R.string.offline_total, items.size, formatFileSize(totalBytes)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onClearAll) {
+                    Text(stringResource(R.string.offline_clear_all), color = MaterialTheme.colorScheme.error)
+                }
+            }
         }
     }
 }
@@ -1082,6 +1141,8 @@ private fun OfflineRow(
     item: OfflineItem,
     onPlay: () -> Unit,
     onCancel: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
     onDelete: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -1129,9 +1190,31 @@ private fun OfflineRow(
                         }
                     }
 
-                    OfflineStatus.QUEUED, OfflineStatus.DOWNLOADING -> {
+                    OfflineStatus.DOWNLOADING -> {
+                        IconButton(onClick = onPause) {
+                            Icon(Icons.Rounded.Pause, contentDescription = stringResource(R.string.offline_pause))
+                        }
                         IconButton(onClick = onCancel) {
                             Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.offline_cancel))
+                        }
+                    }
+
+                    OfflineStatus.QUEUED -> {
+                        IconButton(onClick = onCancel) {
+                            Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.offline_cancel))
+                        }
+                    }
+
+                    OfflineStatus.PAUSED -> {
+                        TextButton(onClick = onResume) {
+                            Text(stringResource(R.string.offline_resume))
+                        }
+                        IconButton(onClick = onDelete) {
+                            Icon(
+                                Icons.Rounded.DeleteOutline,
+                                contentDescription = stringResource(R.string.offline_delete),
+                                tint = MaterialTheme.colorScheme.error,
+                            )
                         }
                     }
 
@@ -1168,6 +1251,17 @@ private fun OfflineRow(
                             item.segmentsDone,
                             item.segmentsTotal,
                         ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                OfflineStatus.PAUSED -> {
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(progress = { item.progress }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.offline_paused) + " · ${item.segmentsDone} / ${item.segmentsTotal}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

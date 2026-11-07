@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -104,6 +105,7 @@ fun CommentOverlay(
     scale: Float = 1f,
     alpha: Float = 1f,
     speed: String = "normal",
+    paused: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val travelMillis = when (speed) {
@@ -117,9 +119,10 @@ fun CommentOverlay(
     var nextId by remember { mutableLongStateOf(0L) }
     val scope = rememberCoroutineScope()
     val channel = remember { Channel<JikkyoComment>(Channel.UNLIMITED) }
+    val pausedState = rememberUpdatedState(paused)
 
     LaunchedEffect(comments) {
-        comments.collect { channel.trySend(it) }
+        comments.collect { if (!pausedState.value) channel.trySend(it) }
     }
 
     BoxWithConstraints(modifier.fillMaxSize()) {

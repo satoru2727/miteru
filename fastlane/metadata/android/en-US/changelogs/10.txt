@@ -1,0 +1,6 @@
+- Downloads can now be paused and resumed (Offline tab or the long-press menu on a recording)
+- "Delete all" added at the bottom of the Offline tab (with the total size)
+- New player menu (top right):
+  - Pause / resume comments
+  - Screenshot (saved to Pictures/Miteru in the gallery)
+  - L-shape crop (moved here from its own button)

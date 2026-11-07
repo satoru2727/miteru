@@ -2,8 +2,13 @@ package io.github.satoru2727.miteru.ui.player
 
 import android.app.PictureInPictureParams
 import android.graphics.Bitmap
+import android.os.Handler
+import android.os.Looper
 import android.util.Rational
+import android.view.PixelCopy
+import android.view.SurfaceView
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -35,17 +40,22 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CommentsDisabled
 import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -95,6 +105,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import io.github.satoru2727.miteru.R
 import io.github.satoru2727.miteru.core.model.Quality
+import io.github.satoru2727.miteru.player.saveBitmapToGallery
 import io.github.satoru2727.miteru.ui.AppViewModel
 import io.github.satoru2727.miteru.ui.CommentPostState
 import io.github.satoru2727.miteru.ui.util.findActivity
@@ -122,6 +133,9 @@ fun PlayerScreen(vm: AppViewModel) {
     var showCommentInput by remember { mutableStateOf(false) }
     var scrubPosition by remember { mutableStateOf<Long?>(null) }
     var cropMode by remember { mutableStateOf(false) }
+    var commentsPaused by remember { mutableStateOf(false) }
+    var showPlayerMenu by remember { mutableStateOf(false) }
+    var playerView by remember { mutableStateOf<PlayerView?>(null) }
 
     val liveCommentsReady by vm.liveCommentPostReady.collectAsStateWithLifecycle()
 
@@ -230,6 +244,41 @@ fun PlayerScreen(vm: AppViewModel) {
         onDispose { c?.removeListener(listener) }
     }
 
+    // スクリーンショット（PixelCopy で映像サーフェスを取り込み、ギャラリーへ保存）
+    fun captureFrame() {
+        val surface = playerView?.videoSurfaceView as? SurfaceView
+        if (surface == null || surface.width <= 0 || surface.height <= 0) {
+            Toast.makeText(context, R.string.player_capture_failed, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val bitmap = runCatching {
+            Bitmap.createBitmap(surface.width, surface.height, Bitmap.Config.ARGB_8888)
+        }.getOrNull()
+        if (bitmap == null) {
+            Toast.makeText(context, R.string.player_capture_failed, Toast.LENGTH_SHORT).show()
+            return
+        }
+        PixelCopy.request(
+            surface,
+            bitmap,
+            { result ->
+                if (result == PixelCopy.SUCCESS) {
+                    val uri = saveBitmapToGallery(context, bitmap)
+                    bitmap.recycle()
+                    Toast.makeText(
+                        context,
+                        if (uri != null) R.string.player_capture_saved else R.string.player_capture_failed,
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                } else {
+                    bitmap.recycle()
+                    Toast.makeText(context, R.string.player_capture_failed, Toast.LENGTH_SHORT).show()
+                }
+            },
+            Handler(Looper.getMainLooper()),
+        )
+    }
+
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).clipToBounds()) {
         val density = LocalDensity.current
         val containerWidthPx = constraints.maxWidth.toFloat()
@@ -245,7 +294,7 @@ fun PlayerScreen(vm: AppViewModel) {
                         useController = false
                         resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                         setShutterBackgroundColor(android.graphics.Color.BLACK)
-                    }
+                    }.also { playerView = it }
                 },
                 update = { it.player = controller },
                 modifier = Modifier
@@ -265,6 +314,7 @@ fun PlayerScreen(vm: AppViewModel) {
                     scale = settings?.commentScale ?: 1f,
                     alpha = settings?.commentAlpha ?: 1f,
                     speed = settings?.commentSpeed ?: "normal",
+                    paused = commentsPaused,
                     modifier = videoRect?.let { rect ->
                         with(density) {
                             Modifier
@@ -359,12 +409,57 @@ fun PlayerScreen(vm: AppViewModel) {
                             Icon(Icons.Rounded.Audiotrack, contentDescription = stringResource(R.string.player_audio), tint = Color.White)
                         }
                     }
-                    IconButton(onClick = { cropMode = !cropMode }) {
-                        Icon(
-                            Icons.Rounded.Crop,
-                            contentDescription = stringResource(R.string.player_crop),
-                            tint = if (cropMode) MaterialTheme.colorScheme.primary else Color.White,
-                        )
+                    Box {
+                        IconButton(onClick = { showPlayerMenu = true }) {
+                            Icon(
+                                Icons.Rounded.MoreVert,
+                                contentDescription = stringResource(R.string.player_menu),
+                                tint = Color.White,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showPlayerMenu,
+                            onDismissRequest = { showPlayerMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.player_crop)) },
+                                leadingIcon = { Icon(Icons.Rounded.Crop, contentDescription = null) },
+                                trailingIcon = { if (cropMode) Text("✓") },
+                                onClick = {
+                                    cropMode = !cropMode
+                                    showPlayerMenu = false
+                                },
+                            )
+                            if (commentFlow != null) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            if (commentsPaused) {
+                                                stringResource(R.string.player_comments_resume)
+                                            } else {
+                                                stringResource(R.string.player_comments_pause)
+                                            },
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Rounded.CommentsDisabled, contentDescription = null)
+                                    },
+                                    trailingIcon = { if (commentsPaused) Text("✓") },
+                                    onClick = {
+                                        commentsPaused = !commentsPaused
+                                        showPlayerMenu = false
+                                    },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.player_capture)) },
+                                leadingIcon = { Icon(Icons.Rounded.PhotoCamera, contentDescription = null) },
+                                onClick = {
+                                    showPlayerMenu = false
+                                    captureFrame()
+                                },
+                            )
+                        }
                     }
                     if (activity != null) {
                         IconButton(
