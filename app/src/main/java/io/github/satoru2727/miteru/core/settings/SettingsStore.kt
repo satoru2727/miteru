@@ -31,7 +31,9 @@ data class Settings(
     val commentSpeed: String = "normal",
     val commentNgWords: String = "",
     val showSubchannels: Boolean = true,
+    val autoSkipCm: Boolean = false,
     val watchedVideoIds: Set<Int> = emptySet(),
+    val servers: List<SavedServer> = emptyList(),
     val cachedChannelsAt: Long = 0L,
     val playbackActive: Boolean = false,
 ) {
@@ -60,7 +62,9 @@ class SettingsStore(private val context: Context) {
         val COMMENT_SPEED = stringPreferencesKey("comment_speed")
         val COMMENT_NG = stringPreferencesKey("comment_ng_words")
         val SHOW_SUBCHANNELS = booleanPreferencesKey("show_subchannels")
+        val AUTO_SKIP_CM = booleanPreferencesKey("auto_skip_cm")
         val WATCHED_IDS = stringPreferencesKey("watched_video_ids")
+        val SERVERS = stringPreferencesKey("servers")
         val CHANNELS_JSON = stringPreferencesKey("channels_cache_json")
         val CHANNELS_AT = longPreferencesKey("channels_cache_at")
         val POSITIONS = stringPreferencesKey("resume_positions")
@@ -83,7 +87,9 @@ class SettingsStore(private val context: Context) {
             commentSpeed = prefs[Keys.COMMENT_SPEED] ?: "normal",
             commentNgWords = prefs[Keys.COMMENT_NG] ?: "",
             showSubchannels = prefs[Keys.SHOW_SUBCHANNELS] ?: true,
+            autoSkipCm = prefs[Keys.AUTO_SKIP_CM] ?: false,
             watchedVideoIds = decodeIdSet(prefs[Keys.WATCHED_IDS]),
+            servers = decodeServers(prefs[Keys.SERVERS]),
             cachedChannelsAt = prefs[Keys.CHANNELS_AT] ?: 0L,
             playbackActive = prefs[Keys.PLAYBACK_ACTIVE] ?: false,
         )
@@ -139,6 +145,14 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setShowSubchannels(enabled: Boolean) {
         context.miteruDataStore.edit { it[Keys.SHOW_SUBCHANNELS] = enabled }
+    }
+
+    suspend fun setAutoSkipCm(enabled: Boolean) {
+        context.miteruDataStore.edit { it[Keys.AUTO_SKIP_CM] = enabled }
+    }
+
+    suspend fun setServers(servers: List<SavedServer>) {
+        context.miteruDataStore.edit { it[Keys.SERVERS] = encodeServers(servers) }
     }
 
     suspend fun watchedIds(): Set<Int> =
@@ -233,3 +247,16 @@ private fun decodeIdSet(raw: String?): Set<Int> =
     raw.orEmpty().split(',').mapNotNull { it.trim().toIntOrNull() }.toSet()
 
 private fun encodeIdSet(ids: Set<Int>): String = ids.joinToString(",")
+
+/** 保存済みサーバー（名前 + URL）。複数サーバーの切り替えに使う。 */
+data class SavedServer(val name: String, val url: String)
+
+private fun encodeServers(servers: List<SavedServer>): String =
+    servers.joinToString("\u001E") { "${it.name}\u001F${it.url}" }
+
+private fun decodeServers(raw: String?): List<SavedServer> =
+    raw.orEmpty().split('\u001E').mapNotNull { entry ->
+        val separator = entry.indexOf('\u001F')
+        if (separator <= 0) return@mapNotNull null
+        SavedServer(entry.substring(0, separator), entry.substring(separator + 1))
+    }.filter { it.url.isNotBlank() }

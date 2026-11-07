@@ -20,3 +20,18 @@ internal fun cmRemainingSeconds(positionMs: Long, sections: List<CmSection>): In
     val target = cmSkipTargetMs(positionMs, sections) ?: return null
     return ((target - positionMs) / 1000L).coerceAtLeast(0L).toInt()
 }
+
+/**
+ * CM 自動スキップのジャンプ先。前回位置より前進していて（手動シークで入った直後は対象外）、
+ * CM 区間の中にいて、残りが minRemainingMs 以上あるときだけ区間の終端を返す。
+ */
+internal fun cmAutoSkipTargetMs(
+    positionMs: Long,
+    lastPositionMs: Long,
+    sections: List<CmSection>,
+    minRemainingMs: Long = 1_000L,
+): Long? {
+    if (positionMs <= lastPositionMs) return null
+    val target = cmSkipTargetMs(positionMs, sections) ?: return null
+    return if (target - positionMs >= minRemainingMs) target else null
+}

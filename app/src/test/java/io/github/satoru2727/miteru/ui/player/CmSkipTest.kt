@@ -38,4 +38,18 @@ class CmSkipTest {
         assertEquals(60, cmRemainingSeconds(600_000L, sections))
         assertNull(cmRemainingSeconds(100_000L, sections))
     }
+
+    @Test
+    fun autoSkipOnlyWhenAdvancingIntoSection() {
+        // 区間内へ前進 → 終端へ
+        assertEquals(150_000L, cmAutoSkipTargetMs(130_000L, 120_000L, sections))
+        // 前進していない（停止中など）は何もしない
+        assertNull(cmAutoSkipTargetMs(130_000L, 130_000L, sections))
+        // シークで後退して入った直後は何もしない
+        assertNull(cmAutoSkipTargetMs(130_000L, 200_000L, sections))
+        // 区間外は何もしない
+        assertNull(cmAutoSkipTargetMs(100_000L, 90_000L, sections))
+        // 残り 1 秒未満は対象外
+        assertNull(cmAutoSkipTargetMs(149_500L, 149_000L, sections))
+    }
 }

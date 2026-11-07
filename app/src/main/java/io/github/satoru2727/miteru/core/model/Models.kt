@@ -1,6 +1,7 @@
 package io.github.satoru2727.miteru.core.model
 
 import io.github.satoru2727.miteru.core.net.RecordSettingsDto
+import kotlinx.serialization.Serializable
 import java.time.Instant
 
 /** チャンネル種別。KonomiTV の type フィールドに対応する。 */
@@ -106,12 +107,14 @@ data class VideoInfo(
 }
 
 /** 録画に埋め込まれた CM 区間（秒、録画先頭基準）。 */
+@Serializable
 data class CmSection(
     val startSeconds: Double,
     val endSeconds: Double,
 )
 
 /** タイルサムネイル（シークプレビュー用）の情報。 */
+@Serializable
 data class TileInfo(
     val tileWidth: Int,
     val tileHeight: Int,

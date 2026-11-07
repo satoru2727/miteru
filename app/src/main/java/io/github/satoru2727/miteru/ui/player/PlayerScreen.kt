@@ -201,6 +201,21 @@ fun PlayerScreen(vm: AppViewModel) {
         value = vm.tilePreview(videoId, info, pos)
     }
 
+    // CM 自動スキップ（設定が有効なとき、CM 区間に入ると終端へ飛ばす）
+    val autoSkipCm = settings?.autoSkipCm == true
+    var lastAutoSkipPosition by remember { mutableStateOf(0L) }
+    LaunchedEffect(position, autoSkipCm, nowPlaying.videoId) {
+        if (!autoSkipCm || nowPlaying.isLive) {
+            lastAutoSkipPosition = position
+            return@LaunchedEffect
+        }
+        if (scrubPosition == null) {
+            val target = cmAutoSkipTargetMs(position, lastAutoSkipPosition, nowPlaying.cmSections)
+            if (target != null) vm.seekTo(target)
+        }
+        lastAutoSkipPosition = position
+    }
+
     // 動画の実表示サイズ（レターボックスを除いた描画矩形の計算に使う）
     var videoSize by remember { mutableStateOf<VideoSize?>(null) }
     DisposableEffect(controller) {
@@ -332,10 +347,12 @@ fun PlayerScreen(vm: AppViewModel) {
                             )
                         }
                     }
-                    TextButton(onClick = { showQuality = true }) {
-                        Icon(Icons.Rounded.HighQuality, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text(nowPlaying.quality.label, color = Color.White, style = MaterialTheme.typography.labelMedium)
+                    if (!nowPlaying.isOffline) {
+                        TextButton(onClick = { showQuality = true }) {
+                            Icon(Icons.Rounded.HighQuality, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(nowPlaying.quality.label, color = Color.White, style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                     if (audioGroups.size > 1) {
                         IconButton(onClick = { showAudio = true }) {

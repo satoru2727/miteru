@@ -23,13 +23,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -45,12 +51,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.satoru2727.miteru.BuildConfig
@@ -60,6 +68,8 @@ import io.github.satoru2727.miteru.core.settings.ThemeMode
 import io.github.satoru2727.miteru.ui.LocalAppContainer
 import io.github.satoru2727.miteru.ui.AppViewModel
 import io.github.satoru2727.miteru.core.log.MiteruLog
+import io.github.satoru2727.miteru.core.settings.SavedServer
+import kotlinx.coroutines.launch
 
 import io.github.satoru2727.miteru.ui.components.SectionHeader
 import io.github.satoru2727.miteru.ui.crash.shareText
@@ -81,6 +91,8 @@ fun SettingsScreen(
     var qualitySheet by remember { mutableStateOf(false) }
     var confirmClearServer by remember { mutableStateOf(false) }
     var confirmClearCache by remember { mutableStateOf(false) }
+    var showServerSheet by remember { mutableStateOf(false) }
+    var showAddServer by remember { mutableStateOf(false) }
     var ngDialog by remember { mutableStateOf(false) }
     var ngText by remember { mutableStateOf(current.commentNgWords) }
     val uriHandler = LocalUriHandler.current
@@ -120,9 +132,10 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onChangeServer) {
-                        Text(stringResource(R.string.settings_server_change))
+                    TextButton(onClick = { showServerSheet = true }) {
+                        Text(stringResource(R.string.server_manage))
                     }
+                    Spacer(Modifier.weight(1f))
                     TextButton(onClick = { confirmClearServer = true }) {
                         Text(stringResource(R.string.settings_disconnect), color = MaterialTheme.colorScheme.error)
                     }
@@ -185,6 +198,17 @@ fun SettingsScreen(
                         Switch(
                             checked = current.showSubchannels,
                             onCheckedChange = vm::setShowSubchannels,
+                        )
+                    },
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f))
+                SettingRow(
+                    title = stringResource(R.string.settings_cm_auto),
+                    subtitle = stringResource(R.string.settings_cm_auto_desc),
+                    trailing = {
+                        Switch(
+                            checked = current.autoSkipCm,
+                            onCheckedChange = vm::setAutoSkipCm,
                         )
                     },
                 )
@@ -500,6 +524,34 @@ fun SettingsScreen(
             },
         )
     }
+
+    if (showServerSheet) {
+        ServerSheet(
+            vm = vm,
+            servers = current.servers.ifEmpty {
+                current.serverUrl?.let {
+                    listOf(SavedServer(stringResource(R.string.server_default_name), it))
+                } ?: emptyList()
+            },
+            activeUrl = current.serverUrl,
+            onEdit = {
+                showServerSheet = false
+                onChangeServer()
+            },
+            onAdd = {
+                showServerSheet = false
+                showAddServer = true
+            },
+            onDismiss = { showServerSheet = false },
+        )
+    }
+
+    if (showAddServer) {
+        AddServerDialog(
+            vm = vm,
+            onDismiss = { showAddServer = false },
+        )
+    }
 }
 
 @Composable
@@ -550,4 +602,160 @@ private fun Pill(text: String, color: androidx.compose.ui.graphics.Color) {
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
         )
     }
+}
+
+/** 複数サーバーの管理シート（切り替え・削除・追加・現在のサーバーの編集）。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ServerSheet(
+    vm: AppViewModel,
+    servers: List<SavedServer>,
+    activeUrl: String?,
+    onEdit: () -> Unit,
+    onAdd: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
+            Text(stringResource(R.string.server_manage), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(10.dp))
+            servers.forEach { server ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = server.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = server.url,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (server.url == activeUrl) {
+                        Pill(stringResource(R.string.server_active), MaterialTheme.colorScheme.tertiaryContainer)
+                        IconButton(onClick = onEdit) {
+                            Icon(
+                                Icons.Rounded.Edit,
+                                contentDescription = stringResource(R.string.settings_server_change),
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    } else {
+                        TextButton(onClick = {
+                            vm.switchServer(server.url)
+                            onDismiss()
+                        }) {
+                            Text(stringResource(R.string.server_switch))
+                        }
+                        IconButton(onClick = { vm.removeServer(server.url) }) {
+                            Icon(
+                                Icons.Rounded.DeleteOutline,
+                                contentDescription = stringResource(R.string.server_remove),
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = onAdd, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.server_add))
+            }
+        }
+    }
+}
+
+/** サーバーの追加ダイアログ（接続確認 → 保存して切り替え）。 */
+@Composable
+private fun AddServerDialog(
+    vm: AppViewModel,
+    onDismiss: () -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf("") }
+    var testing by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val failMessage = stringResource(R.string.server_add_fail)
+
+    AlertDialog(
+        onDismissRequest = { if (!testing) onDismiss() },
+        title = { Text(stringResource(R.string.server_add)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.server_add_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text(stringResource(R.string.server_add_url)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                message?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !testing && url.isNotBlank(),
+                onClick = {
+                    scope.launch {
+                        testing = true
+                        message = null
+                        val result = vm.testConnection(url)
+                        val info = result.getOrNull()
+                        if (info == null) {
+                            message = failMessage + " (${result.exceptionOrNull()?.message.orEmpty()})"
+                            testing = false
+                        } else if (!vm.addServer(name, url)) {
+                            message = failMessage
+                            testing = false
+                        } else {
+                            testing = false
+                            onDismiss()
+                        }
+                    }
+                },
+            ) {
+                if (testing) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(stringResource(R.string.server_add_save))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !testing) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        },
+    )
 }

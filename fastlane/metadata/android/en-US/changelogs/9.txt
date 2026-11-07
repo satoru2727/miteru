@@ -1,0 +1,5 @@
+- Recordings can now be saved for offline playback (long-press a recording → Download, pick a quality)
+  - Saved recordings play even without a reachable server (Recordings tab → Offline)
+  - Downloads keep running in the background with progress in the notification
+- New "auto-skip CM" setting (applies to recordings with CM sections)
+- Manage multiple servers: add, switch and remove them under Settings → Manage servers

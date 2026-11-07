@@ -10,6 +10,8 @@ import io.github.satoru2727.miteru.core.crash.CrashReporter
 import io.github.satoru2727.miteru.core.log.MiteruLog
 import io.github.satoru2727.miteru.data.JikkyoRepository
 import io.github.satoru2727.miteru.data.KonomiRepository
+import io.github.satoru2727.miteru.data.OfflineDownloader
+import io.github.satoru2727.miteru.data.OfflineStore
 import io.github.satoru2727.miteru.player.PlaybackLauncher
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -41,6 +43,8 @@ class AppContainer(context: Context) {
     val repository: KonomiRepository = KonomiRepository(settings, httpClient, json)
     val jikkyo: JikkyoRepository = JikkyoRepository(repository, httpClient, json)
     val playback: PlaybackLauncher = PlaybackLauncher(appContext, repository, settings)
+    val offlineStore: OfflineStore = OfflineStore(appContext, json)
+    val offline: OfflineDownloader = OfflineDownloader(appContext, repository, offlineStore, httpClient)
 
     val imageLoader: ImageLoader = ImageLoader.Builder(appContext)
         .components {

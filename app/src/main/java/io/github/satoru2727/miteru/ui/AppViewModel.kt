@@ -24,9 +24,11 @@ import io.github.satoru2727.miteru.core.net.RecordSettingsDto
 import io.github.satoru2727.miteru.core.net.ReservationConditionDto
 import io.github.satoru2727.miteru.core.net.ReservationConditionRequestDto
 import io.github.satoru2727.miteru.core.settings.Settings
+import io.github.satoru2727.miteru.core.settings.SavedServer
 import io.github.satoru2727.miteru.core.settings.ThemeMode
 import io.github.satoru2727.miteru.core.util.isMeteredNetwork
 import io.github.satoru2727.miteru.data.JikkyoPostResult
+import io.github.satoru2727.miteru.data.OfflineItem
 import io.github.satoru2727.miteru.ui.player.decodeTileRegion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,6 +85,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     val watchedIds: StateFlow<Set<Int>> = settingsStore.settings
         .map { it.watchedVideoIds }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** オフライン保存の一覧（保存済み + ダウンロード中）。 */
+    val offlineItems: StateFlow<List<OfflineItem>> = container.offline.items
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val serverInfo: StateFlow<ServerInfo?> = repository.serverInfo
     val lastChannelRefresh = repository.lastChannelRefresh
     val nowPlaying = playback.nowPlaying
@@ -654,6 +660,36 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    // ---- オフライン保存 ----
+
+    fun downloadRecording(recording: Recording, quality: Quality) {
+        container.offline.enqueue(recording, quality)
+    }
+
+    fun cancelDownload(videoId: Int) = container.offline.cancel(videoId)
+
+    fun deleteDownload(videoId: Int) = container.offline.delete(videoId)
+
+    fun retryDownload(videoId: Int) = container.offline.retry(videoId)
+
+    /** オフライン保存した録画を再生する。続きから位置があればそこから。 */
+    fun playOfflineItem(item: OfflineItem) {
+        commentPostState = CommentPostState.Idle
+        viewModelScope.launch {
+            val resume = if (currentSettings.resumePlayback) settingsStore.positionFor(item.videoId) else 0L
+            val durationMs = item.durationSeconds * 1000
+            val start = if (resume > 10_000L && resume < durationMs - 30_000L) resume else 0L
+            if (playback.playOffline(item, start)) {
+                commentFlow = if (currentSettings.showComments) {
+                    mutedFlow(recordedComments(item.videoId))
+                } else {
+                    null
+                }
+                openPlayer()
+            }
+        }
+    }
+
     fun setQuality(quality: Quality) {
         viewModelScope.launch { playback.switchQuality(quality) }
     }
@@ -735,6 +771,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setShowSubchannels(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setShowSubchannels(enabled) }
+    }
+
+    fun setAutoSkipCm(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setAutoSkipCm(enabled) }
     }
 
     /** NG ワードに一致するコメントを落とす。 */
@@ -863,6 +903,54 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         repository.saveServerUrl(normalized)
         refreshAll()
         return true
+    }
+
+    // ---- サーバー管理（複数サーバーの切り替え） ----
+
+    fun switchServer(url: String) {
+        viewModelScope.launch {
+            if (url == settingsStore.snapshot().serverUrl) return@launch
+            playback.stop()
+            repository.saveServerUrl(url)
+            channelsState = LoadState.Idle
+            guideState = LoadState.Idle
+            recordingsState = LoadState.Idle
+            reservationsState = LoadState.Idle
+            conditionsState = LoadState.Idle
+            seriesState = LoadState.Idle
+            guideCache.clear()
+            commentFlow = null
+            showPlayer = false
+            playback.playerVisible = false
+            tab = Tab.LIVE
+            refreshAll()
+        }
+    }
+
+    /** サーバーを一覧に追加して切り替える。URL が不正なら false。 */
+    suspend fun addServer(name: String, rawUrl: String): Boolean {
+        val normalized = KonomiApi.normalizeServerUrl(rawUrl) ?: return false
+        val current = settingsStore.snapshot()
+        val base = current.servers.toMutableList()
+        val active = current.serverUrl
+        if (base.isEmpty() && active != null && active != normalized) {
+            // 旧バージョンからの移行: 現在のサーバーを一覧の先頭に残す
+            base.add(SavedServer(active, active))
+        }
+        if (base.none { it.url == normalized }) {
+            base.add(SavedServer(name.ifBlank { normalized }, normalized))
+        }
+        settingsStore.setServers(base)
+        switchServer(normalized)
+        return true
+    }
+
+    fun removeServer(url: String) {
+        viewModelScope.launch {
+            val current = settingsStore.snapshot()
+            if (url == current.serverUrl) return@launch
+            settingsStore.setServers(current.servers.filterNot { it.url == url })
+        }
     }
 
     fun clearServer() {

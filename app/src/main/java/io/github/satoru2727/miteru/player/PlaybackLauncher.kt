@@ -22,6 +22,7 @@ import io.github.satoru2727.miteru.core.log.MiteruLog
 import io.github.satoru2727.miteru.core.net.KonomiApi
 import io.github.satoru2727.miteru.core.settings.SettingsStore
 import io.github.satoru2727.miteru.data.KonomiRepository
+import io.github.satoru2727.miteru.data.OfflineItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,6 +50,7 @@ data class NowPlaying(
     val quality: Quality,
     val cmSections: List<CmSection> = emptyList(),
     val tileInfo: TileInfo? = null,
+    val isOffline: Boolean = false,
 )
 
 data class PlayerUiState(
@@ -326,6 +328,56 @@ class PlaybackLauncher(
         if (player.isPlaying) player.pause() else player.play()
     }
 
+    /** ローカルに保存した HLS（オフライン保存）を再生する。 */
+    suspend fun playOffline(item: OfflineItem, startPositionMs: Long = 0L): Boolean {
+        val playlist = java.io.File(context.filesDir, "offline/${item.videoId}/playlist.m3u8")
+        if (!playlist.exists()) return false
+        val mediaController = awaitController() ?: return false
+        stopSessionJobs()
+        fallbackStreams = emptyList()
+        fallbackIndex = 0
+        fallbackRecording = null
+
+        val metadata = MediaMetadata.Builder()
+            .setTitle(item.title)
+            .setArtist(item.channelName ?: item.subtitle ?: "")
+            .build()
+        val mediaItem = MediaItem.Builder()
+            .setUri(android.net.Uri.fromFile(playlist))
+            .setMimeType(MimeTypes.APPLICATION_M3U8)
+            .setMediaId("video:${item.videoId}")
+            .setMediaMetadata(metadata)
+            .build()
+
+        currentLiveChannel = null
+        activeVideoId = item.videoId
+        _nowPlaying.value = NowPlaying(
+            isLive = false,
+            title = item.title,
+            subtitle = item.channelName ?: item.subtitle,
+            channelId = null,
+            videoId = item.videoId,
+            logoUrl = null,
+            quality = Quality.fromApiName(item.quality) ?: Quality.Q720P,
+            cmSections = item.cmSections,
+            tileInfo = item.tileInfo,
+            isOffline = true,
+        )
+        _playerState.value = PlayerUiState()
+
+        return try {
+            mediaController.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0L))
+            mediaController.prepare()
+            mediaController.play()
+            startProgressSaver(item.videoId)
+            settings.setPlaybackActive(true)
+            true
+        } catch (e: Exception) {
+            MiteruLog.w("Player", "failed to start offline playback: ${e.message}")
+            false
+        }
+    }
+
     fun seekTo(positionMs: Long) {
         controller?.seekTo(positionMs.coerceAtLeast(0L))
     }
@@ -388,6 +440,7 @@ class PlaybackLauncher(
         val isLive = mediaId.startsWith("live:")
         val id = mediaId.substringAfter(':', "")
         val title = mediaItem.mediaMetadata.title?.toString() ?: return
+        val isOffline = !isLive && mediaItem.localConfiguration?.uri?.scheme == "file"
         _nowPlaying.value = NowPlaying(
             isLive = isLive,
             title = title,
@@ -396,6 +449,7 @@ class PlaybackLauncher(
             videoId = if (!isLive) id.toIntOrNull() else null,
             logoUrl = if (isLive) settings.snapshot().serverUrl?.let { "$it/api/channels/$id/logo" } else null,
             quality = Quality.Q1080P,
+            isOffline = isOffline,
         )
         _playerState.value = _playerState.value.copy(
             isPlaying = mediaController.isPlaying,
@@ -403,7 +457,7 @@ class PlaybackLauncher(
         )
 
         // コールドスタート復元時は録画情報が無いので、CM 区間とタイル情報を後から補う
-        if (!isLive) {
+        if (!isLive && !isOffline) {
             val restoredVideoId = id.toIntOrNull()
             if (restoredVideoId != null) {
                 scope.launch {
@@ -424,6 +478,7 @@ class PlaybackLauncher(
     /** 画質変更など、同じコンテンツを別 URL で開き直すときに使う。 */
     suspend fun switchQuality(quality: Quality) {
         val current = _nowPlaying.value ?: return
+        if (current.isOffline) return
         val position = controller?.currentPosition ?: 0L
         if (current.isLive) {
             val channel = currentLiveChannel ?: return
