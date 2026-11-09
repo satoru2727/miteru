@@ -6,8 +6,10 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -43,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,6 +67,7 @@ import io.github.satoru2727.miteru.ui.setup.SetupScreen
 import io.github.satoru2727.miteru.ui.theme.KonomiTheme
 import io.github.satoru2727.miteru.ui.LocalAppContainer
 import io.github.satoru2727.miteru.ui.util.formatClock
+import kotlinx.coroutines.delay
 
 @Composable
 fun AppRoot(container: AppContainer) {
@@ -234,6 +238,44 @@ private fun MainScreen(
 
         if (vm.showPlayer && nowPlaying != null) {
             PlayerScreen(vm)
+        }
+
+        // 接続先が自動で切り替わったことを控えめに知らせる（少し立ったら自動で消える）
+        vm.serverSwitchNotice?.let { notice ->
+            LaunchedEffect(notice) {
+                delay(6_000L)
+                vm.dismissServerSwitchNotice()
+            }
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 12.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.server_switched_notice),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Text(
+                            text = notice,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    TextButton(onClick = vm::dismissServerSwitchNotice) {
+                        Text(stringResource(R.string.settings_ok))
+                    }
+                }
+            }
         }
     }
 

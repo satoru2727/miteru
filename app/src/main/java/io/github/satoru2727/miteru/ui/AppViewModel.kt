@@ -25,6 +25,8 @@ import io.github.satoru2727.miteru.core.net.ReservationConditionDto
 import io.github.satoru2727.miteru.core.net.ReservationConditionRequestDto
 import io.github.satoru2727.miteru.core.settings.Settings
 import io.github.satoru2727.miteru.core.settings.SavedServer
+import io.github.satoru2727.miteru.core.settings.findServerForUrl
+import io.github.satoru2727.miteru.core.settings.newSavedServer
 import io.github.satoru2727.miteru.core.settings.ThemeMode
 import io.github.satoru2727.miteru.core.util.isMeteredNetwork
 import io.github.satoru2727.miteru.data.JikkyoPostResult
@@ -186,6 +188,10 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
     var pendingMeteredPlay by mutableStateOf<PendingPlay?>(null)
         private set
 
+    /** 接続先が自動で切り替わったときに、その URL を控えめに知らせる。 */
+    var serverSwitchNotice by mutableStateOf<String?>(null)
+        private set
+
     private var recordingsPage = 1
     private var recordingsTotal = 0
     private var recordingsFetchJob: Job? = null
@@ -212,6 +218,11 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         }
         viewModelScope.launch {
             resumePositions = settingsStore.positions()
+        }
+        viewModelScope.launch {
+            repository.switchedNotice.collect { switched ->
+                serverSwitchNotice = switched
+            }
         }
     }
 
@@ -967,18 +978,49 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
 
     suspend fun completeSetup(rawUrl: String): Boolean {
         val normalized = KonomiApi.normalizeServerUrl(rawUrl) ?: return false
+        val current = settingsStore.snapshot()
+        val active = current.serverUrl
+        // 変更モード: 使用中のサーバーの、いま使っている接続先を書き換える
+        if (active != null && normalized != active) {
+            val server = findServerForUrl(current.servers, active)
+            if (server != null) {
+                val updated = current.servers.map { entry ->
+                    if (entry.id == server.id) {
+                        entry.copy(
+                            addresses = entry.addresses.map {
+                                if (it.trimEnd('/') == active.trimEnd('/')) normalized else it
+                            },
+                        )
+                    } else {
+                        entry
+                    }
+                }
+                settingsStore.setServers(updated)
+            }
+        }
         repository.saveServerUrl(normalized)
+        // サーバー一覧がまだ無ければ、接続先の管理ができるようにここで作っておく
+        settingsStore.ensureServersListed()
         refreshAll()
         return true
     }
 
-    // ---- サーバー管理（複数サーバーの切り替え） ----
+    // ---- サーバー管理（複数サーバーの切り替え・接続先の自動選択） ----
 
-    fun switchServer(url: String) {
+    /** 接続先が自動で切り替わったときの通知を閉じる。 */
+    fun dismissServerSwitchNotice() {
+        serverSwitchNotice = null
+    }
+
+    /** サーバーへ切り替える。接続先が複数あれば、いま到達できるものへ自動でつなぐ。 */
+    fun switchServer(server: SavedServer) {
         viewModelScope.launch {
-            if (url == settingsStore.snapshot().serverUrl) return@launch
+            val current = settingsStore.snapshot().serverUrl
+            if (server.addresses.any { it.trimEnd('/') == current?.trimEnd('/') }) return@launch
             playback.stop()
-            repository.saveServerUrl(url)
+            // 接続先が複数あれば、最初に応答したものへつなぐ（どれもだめなら先頭を使う）
+            val target = repository.selectAddressFor(server) ?: server.primaryUrl
+            repository.saveServerUrl(target)
             channelsState = LoadState.Idle
             guideState = LoadState.Idle
             recordingsState = LoadState.Idle
@@ -999,24 +1041,70 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         val normalized = KonomiApi.normalizeServerUrl(rawUrl) ?: return false
         val current = settingsStore.snapshot()
         val base = current.servers.toMutableList()
+        // すでに同じ URL が登録されている場合は、そのサーバーへ切り替えるだけにする
+        val existing = base.firstOrNull { server -> server.addresses.contains(normalized) }
+        if (existing != null) {
+            switchServer(existing)
+            return true
+        }
         val active = current.serverUrl
         if (base.isEmpty() && active != null && active != normalized) {
             // 旧バージョンからの移行: 現在のサーバーを一覧の先頭に残す
-            base.add(SavedServer(active, active))
+            base.add(newSavedServer(active, active))
         }
-        if (base.none { it.url == normalized }) {
-            base.add(SavedServer(name.ifBlank { normalized }, normalized))
-        }
+        val entry = newSavedServer(name, normalized)
+        base.add(entry)
         settingsStore.setServers(base)
-        switchServer(normalized)
+        switchServer(entry)
         return true
     }
 
-    fun removeServer(url: String) {
+    /** サーバーに接続先を追加する（自宅 LAN と外出先用など）。重複や不正な URL なら false。 */
+    suspend fun addServerAddress(serverId: String, rawUrl: String): Boolean {
+        val normalized = KonomiApi.normalizeServerUrl(rawUrl) ?: return false
+        val current = settingsStore.snapshot()
+        if (current.servers.any { server -> server.addresses.contains(normalized) }) return false
+        val updated = current.servers.map { server ->
+            if (server.id == serverId) {
+                server.copy(addresses = server.addresses + normalized)
+            } else {
+                server
+            }
+        }
+        settingsStore.setServers(updated)
+        return true
+    }
+
+    /** サーバーから接続先を外す。いま使っている接続先だった場合は、残りの接続先へ移る。 */
+    fun removeServerAddress(serverId: String, url: String) {
         viewModelScope.launch {
             val current = settingsStore.snapshot()
-            if (url == current.serverUrl) return@launch
-            settingsStore.setServers(current.servers.filterNot { it.url == url })
+            val server = current.servers.firstOrNull { it.id == serverId } ?: return@launch
+            if (server.addresses.size <= 1) return@launch
+            val updated = current.servers.map { entry ->
+                if (entry.id == serverId) {
+                    entry.copy(addresses = entry.addresses.filterNot { it == url })
+                } else {
+                    entry
+                }
+            }
+            settingsStore.setServers(updated)
+            if (current.serverUrl == url) {
+                // いま使っている接続先を外したら、残りの接続先へ移る
+                playback.stop()
+                val next = updated.first { it.id == serverId }.primaryUrl
+                repository.saveServerUrl(next)
+                refreshAll()
+            }
+        }
+    }
+
+    fun removeServer(serverId: String) {
+        viewModelScope.launch {
+            val current = settingsStore.snapshot()
+            val server = current.servers.firstOrNull { it.id == serverId } ?: return@launch
+            if (server.addresses.contains(current.serverUrl)) return@launch
+            settingsStore.setServers(current.servers.filterNot { it.id == serverId })
         }
     }
 

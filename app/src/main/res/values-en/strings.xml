@@ -174,6 +174,14 @@
     <string name="server_remove">Remove</string>
     <string name="server_remove_title">Remove this server?</string>
     <string name="server_manage">Manage servers</string>
+    <string name="server_addresses">Addresses</string>
+    <string name="server_addresses_hint">Add URLs for home LAN and remote access. The app switches to whichever responds.</string>
+    <string name="server_address_add">Add address</string>
+    <string name="server_address_remove">Remove address</string>
+    <string name="server_address_active">Connected</string>
+    <string name="server_address_count">%1$d addresses</string>
+    <string name="server_address_failed">Could not add (invalid or already registered)</string>
+    <string name="server_switched_notice">Switched server address automatically</string>
     <string name="player_retry">Retry</string>
     <string name="player_error">Playback failed</string>
     <string name="player_error_hint">Check that the server is running and the quality setting is available.</string>

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -69,6 +70,7 @@ import io.github.satoru2727.miteru.ui.LocalAppContainer
 import io.github.satoru2727.miteru.ui.AppViewModel
 import io.github.satoru2727.miteru.core.log.MiteruLog
 import io.github.satoru2727.miteru.core.settings.SavedServer
+import io.github.satoru2727.miteru.core.settings.newSavedServer
 import kotlinx.coroutines.launch
 
 import io.github.satoru2727.miteru.ui.components.SectionHeader
@@ -581,7 +583,7 @@ fun SettingsScreen(
             vm = vm,
             servers = current.servers.ifEmpty {
                 current.serverUrl?.let {
-                    listOf(SavedServer(stringResource(R.string.server_default_name), it))
+                    listOf(newSavedServer(stringResource(R.string.server_default_name), it))
                 } ?: emptyList()
             },
             activeUrl = current.serverUrl,
@@ -655,7 +657,7 @@ private fun Pill(text: String, color: androidx.compose.ui.graphics.Color) {
     }
 }
 
-/** 複数サーバーの管理シート（切り替え・削除・追加・現在のサーバーの編集）。 */
+/** 複数サーバーの管理シート（切り替え・削除・追加・接続先の管理）。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ServerSheet(
@@ -666,6 +668,7 @@ private fun ServerSheet(
     onAdd: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var addressServerId by remember { mutableStateOf<String?>(null) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -674,6 +677,7 @@ private fun ServerSheet(
             Text(stringResource(R.string.server_manage), style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(10.dp))
             servers.forEach { server ->
+                val isActive = activeUrl != null && server.addresses.any { it == activeUrl }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -687,15 +691,31 @@ private fun ServerSheet(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            text = server.url,
+                            text = if (isActive) (activeUrl ?: server.primaryUrl) else server.primaryUrl,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (server.addresses.size > 1) {
+                            Text(
+                                text = stringResource(R.string.server_address_count, server.addresses.size),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
-                    if (server.url == activeUrl) {
+                    if (isActive) {
                         Pill(stringResource(R.string.server_active), MaterialTheme.colorScheme.tertiaryContainer)
+                    }
+                    IconButton(onClick = { addressServerId = server.id }) {
+                        Icon(
+                            Icons.Rounded.Link,
+                            contentDescription = stringResource(R.string.server_addresses),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    if (isActive) {
                         IconButton(onClick = onEdit) {
                             Icon(
                                 Icons.Rounded.Edit,
@@ -705,12 +725,12 @@ private fun ServerSheet(
                         }
                     } else {
                         TextButton(onClick = {
-                            vm.switchServer(server.url)
+                            vm.switchServer(server)
                             onDismiss()
                         }) {
                             Text(stringResource(R.string.server_switch))
                         }
-                        IconButton(onClick = { vm.removeServer(server.url) }) {
+                        IconButton(onClick = { vm.removeServer(server.id) }) {
                             Icon(
                                 Icons.Rounded.DeleteOutline,
                                 contentDescription = stringResource(R.string.server_remove),
@@ -729,6 +749,150 @@ private fun ServerSheet(
             }
         }
     }
+
+    addressServerId?.let { serverId ->
+        val server = servers.firstOrNull { it.id == serverId }
+        if (server != null) {
+            ServerAddressSheet(
+                vm = vm,
+                server = server,
+                activeUrl = activeUrl,
+                onDismiss = { addressServerId = null },
+            )
+        }
+    }
+}
+
+/** サーバーの接続先（自宅 LAN・外出先など）を管理するシート。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ServerAddressSheet(
+    vm: AppViewModel,
+    server: SavedServer,
+    activeUrl: String?,
+    onDismiss: () -> Unit,
+) {
+    var showAdd by remember { mutableStateOf(false) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 28.dp)) {
+            Text(stringResource(R.string.server_addresses), style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.server_addresses_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            server.addresses.forEach { address ->
+                val isActiveAddress = activeUrl != null && address == activeUrl
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                ) {
+                    Text(
+                        text = address,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (isActiveAddress) {
+                        Pill(stringResource(R.string.server_address_active), MaterialTheme.colorScheme.tertiaryContainer)
+                    }
+                    IconButton(
+                        onClick = { vm.removeServerAddress(server.id, address) },
+                        enabled = server.addresses.size > 1,
+                    ) {
+                        Icon(
+                            Icons.Rounded.DeleteOutline,
+                            contentDescription = stringResource(R.string.server_address_remove),
+                            tint = if (server.addresses.size > 1) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { showAdd = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.server_address_add))
+            }
+        }
+    }
+
+    if (showAdd) {
+        AddServerAddressDialog(
+            vm = vm,
+            serverId = server.id,
+            onDismiss = { showAdd = false },
+        )
+    }
+}
+
+/** 接続先の追加ダイアログ。接続確認はせずに保存する（いま届かない接続先も登録できるように）。 */
+@Composable
+private fun AddServerAddressDialog(
+    vm: AppViewModel,
+    serverId: String,
+    onDismiss: () -> Unit,
+) {
+    var url by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val failedMessage = stringResource(R.string.server_address_failed)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.server_address_add)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text(stringResource(R.string.server_add_url)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                message?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = url.isNotBlank(),
+                onClick = {
+                    scope.launch {
+                        if (vm.addServerAddress(serverId, url)) {
+                            onDismiss()
+                        } else {
+                            message = failedMessage
+                        }
+                    }
+                },
+            ) {
+                Text(stringResource(R.string.server_add_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        },
+    )
 }
 
 /** サーバーの追加ダイアログ（接続確認 → 保存して切り替え）。 */

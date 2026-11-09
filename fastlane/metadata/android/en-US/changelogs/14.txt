@@ -1,0 +1,3 @@
+- Add multiple addresses per server (home LAN, remote) under Settings -> Manage servers -> Addresses
+- The app switches automatically to whichever address responds: on connection errors it retries via another address, and re-evaluates when the network changes
+- Watch history and resume positions are shared per server, not per address

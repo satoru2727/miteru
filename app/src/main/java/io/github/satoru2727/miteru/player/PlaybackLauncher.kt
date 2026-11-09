@@ -506,9 +506,13 @@ class PlaybackLauncher(
                 val result = withTimeoutOrNull(4_000L) {
                     runCatching { api.keepAlive(videoId, quality, sessionId) }
                 }
-                if ((result?.exceptionOrNull() as? ApiException)?.statusCode == 422) {
+                val failure = result?.exceptionOrNull() as? ApiException
+                if (failure?.statusCode == 422) {
                     // セッションが消えていたら、プレイリスト API を叩いて同じ session_id で作り直す
                     runCatching { api.touchVideoSession(videoId, quality, sessionId) }
+                } else if (failure?.isNetworkError == true) {
+                    // 接続先が使えなくなっていたら、別の接続先への切り替えを試す
+                    runCatching { repository.failoverIfNeeded() }
                 }
             }
         }

@@ -28,6 +28,31 @@ internal fun serverScope(url: String?): String? {
     return digest.take(6).joinToString("") { "%02x".format(it) }
 }
 
+/** 接続先 URL に対応するサーバーを探す。接続先の末尾スラッシュは無視する。 */
+internal fun findServerForUrl(servers: List<SavedServer>, url: String?): SavedServer? {
+    val normalized = url?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() } ?: return null
+    return servers.firstOrNull { server ->
+        server.addresses.any { it.trimEnd('/') == normalized }
+    }
+}
+
+/**
+ * 現在の接続先 URL に対応する設定スコープを解決する。
+ * 同じサーバーに複数の接続先 (自宅 LAN と外出先など) があっても、
+ * 使う接続先が変わっただけで視聴位置などのデータが分断されないよう、
+ * URL ではなくサーバーの ID をスコープに使う。
+ */
+internal fun scopeFor(servers: List<SavedServer>, url: String?): String? =
+    findServerForUrl(servers, url)?.id?.takeIf { it.isNotBlank() } ?: serverScope(url)
+
+/** 新しいサーバーを作る。ID は最初の接続先から導出し、保存後は固定される。 */
+internal fun newSavedServer(name: String, url: String): SavedServer =
+    SavedServer(
+        id = serverScope(url) ?: url,
+        name = name.ifBlank { url },
+        addresses = listOf(url),
+    )
+
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 
 data class Settings(
@@ -94,6 +119,9 @@ class SettingsStore(private val context: Context) {
     private fun positionsKeyFor(scope: String?) =
         if (scope == null) Keys.POSITIONS else stringPreferencesKey("resume_positions@$scope")
 
+    /** サーバーごとに、最後に接続に成功した接続先を記録する（自動切り替えの優先に使う）。 */
+    private fun lastGoodKeyFor(serverId: String) = stringPreferencesKey("last_good_address@$serverId")
+
     /** スコープ済みキーを優先し、未移行のときだけ旧キーにフォールバックする。 */
     private fun effective(
         prefs: Preferences,
@@ -109,7 +137,7 @@ class SettingsStore(private val context: Context) {
 
     private suspend fun readScoped(): Scoped {
         val prefs = context.miteruDataStore.data.first()
-        val scope = serverScope(prefs[Keys.SERVER_URL])
+        val scope = scopeFor(decodeServers(prefs[Keys.SERVERS]), prefs[Keys.SERVER_URL])
         return Scoped(
             scope = scope,
             watched = effective(prefs, scope, watchedKeyFor(scope), Keys.WATCHED_IDS),
@@ -119,12 +147,20 @@ class SettingsStore(private val context: Context) {
 
     /** 旧キーのデータを現在のサーバーのスコープへ一度だけ移行する。アプリ起動直後に呼ぶ。 */
     suspend fun ensureLegacyMigrated() {
-        writeMutex.withLock { migrateLocked() }
+        writeMutex.withLock {
+            migrateLocked()
+            ensureServersLocked()
+        }
+    }
+
+    /** サーバー一覧が空なら現在の接続先から作る（冪等）。接続先の管理の前に呼ぶ。 */
+    suspend fun ensureServersListed() {
+        writeMutex.withLock { ensureServersLocked() }
     }
 
     private suspend fun migrateLocked() {
         val prefs = context.miteruDataStore.data.first()
-        val scope = serverScope(prefs[Keys.SERVER_URL]) ?: return
+        val scope = scopeFor(decodeServers(prefs[Keys.SERVERS]), prefs[Keys.SERVER_URL]) ?: return
         if (prefs[Keys.LEGACY_MARKER] == scope) return
         val legacyWatched = prefs[Keys.WATCHED_IDS]
         val legacyPositions = prefs[Keys.POSITIONS]
@@ -139,8 +175,18 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /** サーバー一覧がまだ無いとき、現在の接続先から 1 件作る（サーバー一覧の導入前からの移行）。 */
+    private suspend fun ensureServersLocked() {
+        val prefs = context.miteruDataStore.data.first()
+        if (decodeServers(prefs[Keys.SERVERS]).isNotEmpty()) return
+        val url = prefs[Keys.SERVER_URL]?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() } ?: return
+        context.miteruDataStore.edit { p ->
+            p[Keys.SERVERS] = encodeServers(listOf(newSavedServer(url, url)))
+        }
+    }
+
     val settings: Flow<Settings> = context.miteruDataStore.data.map { prefs ->
-        val scope = serverScope(prefs[Keys.SERVER_URL])
+        val scope = scopeFor(decodeServers(prefs[Keys.SERVERS]), prefs[Keys.SERVER_URL])
         Settings(
             serverUrl = prefs[Keys.SERVER_URL],
             themeMode = runCatching {
@@ -229,6 +275,13 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setServers(servers: List<SavedServer>) {
         context.miteruDataStore.edit { it[Keys.SERVERS] = encodeServers(servers) }
+    }
+
+    suspend fun lastGoodAddress(serverId: String): String? =
+        context.miteruDataStore.data.first()[lastGoodKeyFor(serverId)]
+
+    suspend fun setLastGoodAddress(serverId: String, url: String) {
+        context.miteruDataStore.edit { it[lastGoodKeyFor(serverId)] = url }
     }
 
     suspend fun watchedIds(): Set<Int> =
@@ -337,15 +390,50 @@ private fun decodeIdSet(raw: String?): Set<Int> =
 
 private fun encodeIdSet(ids: Set<Int>): String = ids.joinToString(",")
 
-/** 保存済みサーバー（名前 + URL）。複数サーバーの切り替えに使う。 */
-data class SavedServer(val name: String, val url: String)
+/**
+ * 保存済みサーバー（名前 + 接続先候補）。
+ * 1 つのサーバーに複数の接続先 (自宅 LAN・外出先のドメイン・Tailscale など) を持てて、
+ * 到達できる接続先へ自動で切り替わる。視聴位置などは接続先ではなくサーバー単位で共有される。
+ */
+data class SavedServer(
+    val id: String,
+    val name: String,
+    val addresses: List<String>,
+) {
+    /** 最初の接続先（優先順の先頭）。 */
+    val primaryUrl: String get() = addresses.first()
+}
 
-private fun encodeServers(servers: List<SavedServer>): String =
-    servers.joinToString("\u001E") { "${it.name}\u001F${it.url}" }
+private const val SERVER_RECORD_SEPARATOR = "\u001E"
+private const val SERVER_FIELD_SEPARATOR = "\u001F"
+private const val SERVER_ADDRESS_SEPARATOR = "\u001D"
 
-private fun decodeServers(raw: String?): List<SavedServer> =
-    raw.orEmpty().split('\u001E').mapNotNull { entry ->
-        val separator = entry.indexOf('\u001F')
-        if (separator <= 0) return@mapNotNull null
-        SavedServer(entry.substring(0, separator), entry.substring(separator + 1))
-    }.filter { it.url.isNotBlank() }
+/** サーバー一覧を保存用の文字列にまとめる。 */
+internal fun encodeServers(servers: List<SavedServer>): String =
+    servers.joinToString(SERVER_RECORD_SEPARATOR) { server ->
+        listOf(
+            server.id,
+            server.name,
+            server.addresses.joinToString(SERVER_ADDRESS_SEPARATOR),
+        ).joinToString(SERVER_FIELD_SEPARATOR)
+    }
+
+/** 保存用の文字列からサーバー一覧を復元する。旧形式 (名前 + 単一 URL) も読める。 */
+internal fun decodeServers(raw: String?): List<SavedServer> =
+    raw.orEmpty().split(SERVER_RECORD_SEPARATOR).mapNotNull { entry ->
+        val fields = entry.split(SERVER_FIELD_SEPARATOR)
+        when (fields.size) {
+            // 旧形式: 「名前 + URL」。ID は URL から導出する
+            2 -> SavedServer(
+                id = serverScope(fields[1]) ?: fields[1],
+                name = fields[0],
+                addresses = listOf(fields[1]),
+            )
+            // 新形式: 「ID + 名前 + 接続先候補」
+            3 -> {
+                val addresses = fields[2].split(SERVER_ADDRESS_SEPARATOR).filter { it.isNotBlank() }
+                SavedServer(id = fields[0], name = fields[1], addresses = addresses)
+            }
+            else -> null
+        }
+    }.filter { it.addresses.isNotEmpty() }

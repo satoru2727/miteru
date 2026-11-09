@@ -8,6 +8,7 @@ import coil3.request.crossfade
 import io.github.satoru2727.miteru.core.settings.SettingsStore
 import io.github.satoru2727.miteru.core.crash.CrashReporter
 import io.github.satoru2727.miteru.core.log.MiteruLog
+import io.github.satoru2727.miteru.core.net.ServerConnector
 import io.github.satoru2727.miteru.data.JikkyoRepository
 import io.github.satoru2727.miteru.data.KonomiRepository
 import io.github.satoru2727.miteru.data.OfflineDownloader
@@ -40,7 +41,13 @@ class AppContainer(context: Context) {
 
     val crashReporter: CrashReporter = CrashReporter(appContext)
     val settings: SettingsStore = SettingsStore(appContext)
-    val repository: KonomiRepository = KonomiRepository(settings, httpClient, json)
+    val serverConnector: ServerConnector = ServerConnector(settings, httpClient, json)
+    val repository: KonomiRepository = KonomiRepository(settings, httpClient, json, serverConnector)
+
+    init {
+        // ネットワークの変化 (Wi-Fi への接続・切断) を監視して、接続先を自動で見直す
+        serverConnector.startNetworkMonitoring(appContext)
+    }
     val jikkyo: JikkyoRepository = JikkyoRepository(repository, httpClient, json)
     val playback: PlaybackLauncher = PlaybackLauncher(appContext, repository, settings)
     val offlineStore: OfflineStore = OfflineStore(appContext, json)
